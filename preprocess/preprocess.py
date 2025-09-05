@@ -515,3 +515,53 @@ def main():
         print(f"📊 Average tumor preservation: {avg_preservation:.3f}")
         print(f"🧠 Average brain mask coverage: {avg_brain_coverage:.1f}%")
 
+    # Create nnU-Net dataset JSON with correct training entries
+    all_successful_cases = [str(stats['case_id']) for stats in processing_stats if stats['success']]
+
+    nnunet_dataset_json = {
+        "channel_names": {
+            "0": "FLAIR",
+            "1": "T1w",
+            "2": "T1Gd",
+            "3": "T2w"
+        },
+        "labels": {
+            "background": 0,
+            "edema": 1,
+            "non_enhancing_tumor": 2,
+            "enhancing_tumor": 3
+        },
+        "regions_class_order": [1, 2, 3],
+        "numTraining": int(successful_cases),
+        "file_ending": ".nii.gz",
+        "overwrite_image_reader_writer": "NibabelIOWithReorient",
+        "nnUNet_version": "2.0",
+        "dataset_name": "Dataset001_BrainTumor",
+        "description": "Brain tumor segmentation from Medical Segmentation Decathlon with professional preprocessing",
+        "reference": "BraTS challenge - targeting WT Dice ≥ 90, BraTS Avg ≥ 80",
+        "tensorImageSize": "4D",
+        "training": [{"image": f"./imagesTr/{case_id}",
+                      "label": f"./labelsTr/{case_id}.nii.gz"}
+                     for case_id in all_successful_cases]
+    }
+
+    with open(nnunet_dir / 'dataset.json', 'w') as f:
+        json.dump(nnunet_dataset_json, f, indent=2)
+
+    # Create cross-validation splits
+    splits = []
+    if len(all_successful_cases) > 1:
+        kfold = KFold(n_splits=min(5, len(all_successful_cases)), shuffle=True, random_state=42)
+        for train_idx, val_idx in kfold.split(all_successful_cases):
+            train_cases = [all_successful_cases[i] for i in train_idx]
+            val_cases = [all_successful_cases[i] for i in val_idx]
+            splits.append({
+                "train": train_cases,
+                "val": val_cases
+            })
+    else:
+        splits = [{"train": all_successful_cases, "val": all_successful_cases}]
+
+    with open(nnunet_dir / 'splits_final.json', 'w') as f:
+        json.dump(splits, f, indent=2)
+
