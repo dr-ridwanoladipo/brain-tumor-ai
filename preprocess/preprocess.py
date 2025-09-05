@@ -100,3 +100,105 @@ def main():
         train_image_files = [train_image_files[i] for i in sorted(indices)]
         train_label_files = [train_label_files[i] for i in sorted(indices)]
         print(f"🎯 Limited to {len(train_image_files)} volumes for testing")
+
+    # nnU-Net Dataset Fingerprinting & Target Spacing Calibration
+    print("🔬 nnU-Net DATASET FINGERPRINTING:")
+
+    dataset_properties = {
+        'spacings': [],
+        'shapes': [],
+        'modalities': ['FLAIR', 'T1w', 'T1Gd', 'T2w'],
+        'intensity_properties': {mod: {'percentiles': [], 'mean': [], 'std': []} for mod in
+                                 ['FLAIR', 'T1w', 'T1Gd', 'T2w']},
+        'label_properties': {'labels': [], 'volumes': []}
+    }
+
+    # Extract comprehensive dataset fingerprint
+    for idx in tqdm(range(len(train_image_files)), desc="Fingerprinting dataset"):
+        img_path = train_image_files[idx]
+        label_path = train_label_files[idx]
+
+        # Load volumes
+        img_nifti = nib.load(img_path)
+        label_nifti = nib.load(label_path)
+
+        img_data = img_nifti.get_fdata()
+        label_data = label_nifti.get_fdata()
+        spacing = img_nifti.header.get_zooms()[:3]
+
+        # Collect spacing and shape information
+        dataset_properties['spacings'].append(spacing)
+        dataset_properties['shapes'].append(img_data.shape[:3])
+
+        # Analyze intensity properties per modality
+        for mod_idx, modality in enumerate(dataset_properties['modalities']):
+            mod_data = img_data[..., mod_idx]
+
+            # Create brain mask using Otsu thresholding
+            sitk_img = sitk.GetImageFromArray(mod_data.astype(np.float32))
+            otsu_filter = sitk.OtsuThresholdImageFilter()
+            otsu_filter.SetInsideValue(0)
+            otsu_filter.SetOutsideValue(1)
+            brain_mask_sitk = otsu_filter.Execute(sitk_img)
+            brain_mask = sitk.GetArrayFromImage(brain_mask_sitk) > 0
+
+            brain_voxels = mod_data[brain_mask]
+
+            if len(brain_voxels) > 1000:
+                # nnU-Net style percentile analysis
+                percentiles = np.percentile(brain_voxels, [0.5, 10, 50, 90, 99.5])
+                dataset_properties['intensity_properties'][modality]['percentiles'].append(percentiles)
+                dataset_properties['intensity_properties'][modality]['mean'].append(np.mean(brain_voxels))
+                dataset_properties['intensity_properties'][modality]['std'].append(np.std(brain_voxels))
+
+        # Analyze label properties
+        unique_labels = np.unique(label_data)
+        dataset_properties['label_properties']['labels'].append(unique_labels)
+
+        # Calculate label volumes
+        voxel_volume = np.prod(spacing)
+        label_volumes = {}
+        for label_val in unique_labels:
+            if label_val > 0:  # Skip background
+                volume = np.sum(label_data == label_val) * voxel_volume / 1000  # Convert to cm³
+                label_volumes[int(label_val)] = volume
+        dataset_properties['label_properties']['volumes'].append(label_volumes)
+
+    # Calculate nnU-Net target properties
+    spacings_array = np.array(dataset_properties['spacings'])
+    median_spacing = np.median(spacings_array, axis=0)
+    target_spacing = [float(x) for x in median_spacing]
+
+    # Calculate intensity normalization parameters per modality
+    normalization_params = {}
+    for modality in dataset_properties['modalities']:
+        all_percentiles = np.array(dataset_properties['intensity_properties'][modality]['percentiles'])
+        all_means = np.array(dataset_properties['intensity_properties'][modality]['mean'])
+        all_stds = np.array(dataset_properties['intensity_properties'][modality]['std'])
+
+        if len(all_percentiles) > 0:
+            # nnU-Net normalization scheme
+            normalization_params[modality] = {
+                'clip_lower': float(np.median(all_percentiles[:, 0])),  # 0.5th percentile
+                'clip_upper': float(np.median(all_percentiles[:, 4])),  # 99.5th percentile
+                'mean_intensity': float(np.median(all_means)),
+                'std_intensity': float(np.median(all_stds))
+            }
+
+    print(f"✅ Dataset fingerprinting complete")
+    print(f"📏 Target spacing: {target_spacing} mm")
+    print(f"🎯 Modalities analyzed: {len(dataset_properties['modalities'])}")
+
+    # Save dataset fingerprint
+    fingerprint = {
+        'target_spacing': target_spacing,
+        'normalization_params': normalization_params,
+        'dataset_properties': {
+            'num_cases': len(train_image_files),
+            'modalities': dataset_properties['modalities'],
+            'median_spacing': target_spacing
+        }
+    }
+
+    with open(results_dir / 'nnunet_fingerprint.json', 'w') as f:
+        json.dump(fingerprint, f, indent=2)
