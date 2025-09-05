@@ -565,3 +565,100 @@ def main():
     with open(nnunet_dir / 'splits_final.json', 'w') as f:
         json.dump(splits, f, indent=2)
 
+    # Memory cleanup before final operations
+    gc.collect()
+
+    print("📤 Uploading processed data directly to S3...")
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+        # Use raw boto3 S3 client
+        s3_client = boto3.client('s3')
+        bucket = "ridwan-md-brain-tumor-ai-2025"
+
+        # Upload directories using boto3 directly
+        import os
+
+        def upload_directory(local_dir, s3_prefix):
+            for root, dirs, files in os.walk(local_dir):
+                for file in files:
+                    local_path = os.path.join(root, file)
+                    relative_path = os.path.relpath(local_path, local_dir)
+                    s3_key = f"outputs/{timestamp}/{s3_prefix}/{relative_path}".replace("\\", "/")
+                    s3_client.upload_file(local_path, bucket, s3_key)
+
+        upload_directory(str(processed_dir), "processed")
+        print("✅ Processed data uploaded successfully")
+
+        upload_directory(str(results_dir), "results")
+        print("✅ Results uploaded successfully")
+
+        upload_directory(str(nnunet_dir), "nnUNet_raw")
+        print("✅ nnUNet data uploaded successfully")
+
+        print("✅ All data uploaded to S3 successfully")
+    except Exception as e:
+        print(f"❌ S3 upload failed: {e}")
+        raise
+
+    print(f"\n📁 Outputs saved to:")
+    print(f"  • nnU-Net format: {nnunet_dir}")
+    print(f"  • Model outputs: {model_dir} (configs/reports only)")
+    print(f"  • Preprocessed data: {processed_dir}")
+    print(f"  • Statistics: {results_dir}")
+    print("\n🚀 Ready for nnU-Net training!")
+
+    # Generate final report
+    final_report = {
+        'preprocessing_summary': {
+            'total_cases_input': int(len(train_image_files)),
+            'successfully_processed': int(successful_cases),
+            'success_rate_percent': round(float(successful_cases / len(train_image_files) * 100), 1),
+            'target_metrics': 'WT Dice ≥ 90, BraTS Avg ≥ 80'
+        },
+        'nnunet_configuration': {
+            'dataset_name': 'Dataset001_BrainTumor',
+            'target_spacing_mm': [float(x) for x in target_spacing],
+            'modalities': ['FLAIR', 'T1w', 'T1Gd', 'T2w'],
+            'labels': ['background', 'edema', 'non_enhancing_tumor', 'enhancing_tumor'],
+            'cross_validation_folds': int(len(splits))
+        },
+        'clinical_characteristics': {
+            'cases_with_tumor': int(
+                sum(1 for s in processing_stats if s['success'] and s.get('tumor_voxels_after', 0) > 0)),
+            'mean_tumor_preservation': round(
+                float(np.mean([s['tumor_preservation_ratio'] for s in processing_stats if s['success']])), 3),
+            'mean_brain_coverage': round(
+                float(np.mean([s['brain_mask_coverage'] for s in processing_stats if s['success']])), 1)
+        },
+        'preprocessing_pipeline': [
+            'Optimized brain extraction using 2% threshold + 5x5x5 dilation',
+            'Enhanced N4 bias field correction for multi-site harmonization',
+            'nnU-Net v2 intensity normalization with global parameters',
+            'Professional spacing-based resampling with cubic interpolation',
+            'Quality control with NaN/Inf handling and label validation'
+        ]
+    }
+
+    # Save final report to both results and model directories
+    with open(results_dir / 'final_preprocessing_report.json', 'w') as f:
+        json.dump(final_report, f, indent=2)
+
+    with open(model_dir / 'final_preprocessing_report.json', 'w') as f:
+        json.dump(final_report, f, indent=2)
+
+    # SageMaker-specific error handling and validation
+    if successful_cases == 0:
+        raise RuntimeError("❌ No cases processed successfully - check data format and file paths")
+
+    if successful_cases < len(train_image_files) * 0.8:
+        print(f"⚠️ Warning: Success rate below 80% ({successful_cases}/{len(train_image_files)})")
+        print("Consider investigating failed cases before proceeding")
+
+    print("\n✅ SageMaker preprocessing pipeline completed successfully!")
+    print(f"✅ All outputs saved to model directory: {model_dir}")
+    print(f"🎯 Ready for nnU-Net training with {successful_cases} successfully processed volumes")
+
+
+if __name__ == "__main__":
+    main()
