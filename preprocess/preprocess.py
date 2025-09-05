@@ -238,3 +238,98 @@ def main():
         json.dump(harmonization_config, f, indent=2)
 
     print("✅ Multi-site harmonization parameters configured")
+
+    # Professional nnU-Net v2 Preprocessing Pipeline
+    print("🚀 PROFESSIONAL nnU-Net v2 PREPROCESSING:")
+    print(f"Processing {len(train_image_files)} volumes with full harmonization pipeline")
+    print("=" * 60)
+
+    processing_stats = []
+
+    for idx in tqdm(range(len(train_image_files)),
+                    desc="nnU-Net v2 preprocessing",
+                    disable=not sys.stdout.isatty()):
+
+        img_path = train_image_files[idx]
+        label_path = train_label_files[idx]
+        case_id = img_path.stem.split('.')[0]
+
+        try:
+            # Load volumes and extract metadata
+            img_nifti = nib.load(img_path)
+            label_nifti = nib.load(label_path)
+
+            img_data = img_nifti.get_fdata().astype(np.float32)
+            label_data = label_nifti.get_fdata().astype(np.uint8)
+            original_spacing = img_nifti.header.get_zooms()[:3]
+            original_affine = img_nifti.affine
+
+            # Optimized brain extraction
+            all_voxels = img_data[img_data != 0]
+            low_thresh = np.percentile(all_voxels, 2.0)
+
+            # Create initial mask from FLAIR (modality 0)
+            brain_mask = img_data[..., 0] > low_thresh
+
+            # Apply dilation with proven parameters
+            brain_mask = ndimage.binary_dilation(brain_mask, structure=np.ones((5, 5, 5)))
+
+            # Fill holes
+            brain_mask = ndimage.binary_fill_holes(brain_mask)
+
+            # Keep largest connected component
+            labeled_mask, num_labels = ndimage.label(brain_mask)
+            if num_labels > 1:
+                sizes = ndimage.sum(brain_mask, labeled_mask, range(1, num_labels + 1))
+                largest_label = np.argmax(sizes) + 1
+                brain_mask = labeled_mask == largest_label
+
+            # Calculate coverage using bounding box method
+            bbox = np.argwhere(brain_mask)
+            if len(bbox) > 0:
+                mins, maxs = bbox.min(axis=0), bbox.max(axis=0) + 1
+                bbox_volume = np.prod(maxs - mins)
+                brain_voxels_in_bbox = np.sum(brain_mask[mins[0]:maxs[0], mins[1]:maxs[1], mins[2]:maxs[2]])
+                brain_coverage = (brain_voxels_in_bbox / bbox_volume) * 100
+            else:
+                brain_coverage = 0.0
+
+            # N4 bias field correction using pre-extracted mask
+            img_corrected = np.zeros_like(img_data)
+            spacing = list(map(float, img_nifti.header.get_zooms()[:3]))
+
+            for modality_idx in range(img_data.shape[-1]):
+                mod_data = img_data[..., modality_idx]
+
+                # Convert to SimpleITK images
+                sitk_img_mod = sitk.GetImageFromArray(mod_data.astype(np.float32))
+                sitk_mask_mod = sitk.GetImageFromArray(brain_mask.astype(np.uint8))
+
+                # Preserve original NIfTI spacing/orientation
+                sitk_img_mod.SetSpacing(spacing)
+                sitk_mask_mod.SetSpacing(spacing)
+
+                # Shrink for computational efficiency
+                shrink_factor = 4
+                img_shrunk = sitk.Shrink(sitk_img_mod, [shrink_factor] * 3)
+                mask_shrunk = sitk.Shrink(sitk_mask_mod, [shrink_factor] * 3)
+
+                # Enhanced N4 correction
+                corrector = sitk.N4BiasFieldCorrectionImageFilter()
+                corrector.SetMaximumNumberOfIterations([50, 50, 30, 20])
+                corrector.SetConvergenceThreshold(1e-6)
+
+                try:
+                    corrected_shrunk = corrector.Execute(img_shrunk, mask_shrunk)
+
+                    # Get bias field and apply to full resolution
+                    log_bias_field = corrector.GetLogBiasFieldAsImage(sitk_img_mod)
+                    bias_field = np.exp(sitk.GetArrayFromImage(log_bias_field))
+
+                    corrected_fullres = mod_data / (bias_field + 1e-8)
+                    img_corrected[..., modality_idx] = corrected_fullres.astype(np.float32)
+
+                except Exception as e:
+                    print(f"    ⚠️ N4 failed for modality {modality_idx}: {e}")
+                    img_corrected[..., modality_idx] = mod_data
+
