@@ -333,3 +333,54 @@ def main():
                     print(f"    ⚠️ N4 failed for modality {modality_idx}: {e}")
                     img_corrected[..., modality_idx] = mod_data
 
+            # nnU-Net intensity normalization with clipping
+            img_normalized = np.zeros_like(img_corrected)
+
+            for modality_idx, modality in enumerate(dataset_properties['modalities']):
+                mod_data = img_corrected[..., modality_idx]
+
+                if modality not in normalization_params:
+                    img_normalized[..., modality_idx] = mod_data * brain_mask
+                    continue
+
+                # nnU-Net style percentile clipping on full image
+                clip_lower = normalization_params[modality]['clip_lower']
+                clip_upper = normalization_params[modality]['clip_upper']
+
+                mod_data_clipped = np.clip(mod_data, clip_lower, clip_upper)
+
+                # Z-score normalization using global parameters
+                brain_voxels_clipped = mod_data_clipped[brain_mask]
+                if len(brain_voxels_clipped) > 0:
+                    mean_val = normalization_params[modality]['mean_intensity']
+                    std_val = normalization_params[modality]['std_intensity']
+
+                    if std_val > 0:
+                        # Normalize full image, then apply brain mask
+                        normalized_full = (mod_data_clipped - mean_val) / std_val
+                        img_normalized[..., modality_idx] = normalized_full * brain_mask
+                    else:
+                        img_normalized[..., modality_idx] = (mod_data_clipped - mean_val) * brain_mask
+                else:
+                    img_normalized[..., modality_idx] = mod_data_clipped * brain_mask
+
+            # Spatial resampling to nnU-Net target
+            zoom_factors = [orig / target for orig, target in zip(original_spacing, target_spacing)]
+
+            # Calculate new shape with safe rounding
+            new_shape = np.maximum(1, np.round(np.array(img_normalized.shape[:3]) * np.array(zoom_factors))).astype(int)
+
+            # Resample images with cubic interpolation
+            img_resampled = np.zeros((*new_shape, img_normalized.shape[-1]), dtype=np.float32)
+            for modality_idx in range(img_normalized.shape[-1]):
+                img_resampled[..., modality_idx] = ndimage.zoom(
+                    img_normalized[..., modality_idx], zoom_factors, order=3
+                )
+
+            # Resample labels with nearest neighbor
+            label_resampled = ndimage.zoom(label_data, zoom_factors, order=0).astype(np.uint8)
+
+            # Resample brain mask
+            brain_mask_resampled = ndimage.zoom(
+                brain_mask.astype(np.uint8), zoom_factors, order=0
+            ).astype(bool)
