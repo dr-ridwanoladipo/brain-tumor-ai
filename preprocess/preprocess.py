@@ -453,3 +453,65 @@ def main():
                 bias_correction_applied=True,
                 histogram_matching_applied=False
             )
+
+            # Record processing statistics
+            processing_stats.append({
+                'case_id': case_id,
+                'success': True,
+                'original_shape': img_data.shape[:3],
+                'final_shape': img_resampled.shape[:3],
+                'original_spacing': original_spacing,
+                'final_spacing': target_spacing,
+                'tumor_voxels_before': int(tumor_before),
+                'tumor_voxels_after': int(tumor_after),
+                'tumor_preservation_ratio': float(preservation_ratio),
+                'brain_mask_coverage': float(brain_coverage),
+                'intensity_range_per_modality': [
+                    [float(img_resampled[..., i].min()), float(img_resampled[..., i].max())]
+                    for i in range(img_resampled.shape[-1])
+                ]
+            })
+
+            print(f"  ✅ {case_id} processing completed successfully!")
+
+            # Progress logging for SageMaker CloudWatch
+            if (idx + 1) % 10 == 0 or (idx + 1) == len(train_image_files):
+                current_success_rate = sum(1 for s in processing_stats if s['success']) / (idx + 1) * 100
+                print(f"📊 Progress: {idx + 1}/{len(train_image_files)} cases processed")
+                print(f"✅ Success rate: {current_success_rate:.1f}%")
+                print(f"🧠 Recent brain coverage: {brain_coverage:.1f}%")
+                print(f"🎯 Recent tumor preservation: {preservation_ratio:.3f}")
+
+                # Memory cleanup every 10 cases
+                gc.collect()
+
+        except Exception as e:
+            print(f"  ❌ Error processing {case_id}: {e}")
+            processing_stats.append({
+                'case_id': case_id,
+                'success': False,
+                'error': str(e)
+            })
+
+    # Save comprehensive processing statistics
+    processing_df = pd.DataFrame(processing_stats)
+    processing_df.to_csv(results_dir / 'nnunet_preprocessing_stats.csv', index=False)
+
+    successful_cases = processing_df['success'].sum()
+    failed_cases = len(processing_df) - successful_cases
+
+    print("\n" + "=" * 60)
+    print("🎯 PROFESSIONAL nnU-Net v2 PREPROCESSING COMPLETE")
+    print("=" * 60)
+    print(f"✅ Successfully processed: {successful_cases}/{len(processing_df)} volumes")
+    print(f"❌ Failed cases: {failed_cases}")
+    print(f"📊 Success rate: {successful_cases / len(processing_df) * 100:.1f}%")
+
+    if successful_cases > 0:
+        successful_stats = processing_df[processing_df['success']].copy()
+        avg_preservation = successful_stats['tumor_preservation_ratio'].mean()
+        avg_brain_coverage = successful_stats['brain_mask_coverage'].mean()
+
+        print(f"📊 Average tumor preservation: {avg_preservation:.3f}")
+        print(f"🧠 Average brain mask coverage: {avg_brain_coverage:.1f}%")
+
