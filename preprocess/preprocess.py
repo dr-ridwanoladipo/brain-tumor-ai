@@ -202,3 +202,39 @@ def main():
 
     with open(results_dir / 'nnunet_fingerprint.json', 'w') as f:
         json.dump(fingerprint, f, indent=2)
+
+    # Multi-Site MRI Harmonization Configuration
+    print("🔧 MULTI-SITE HARMONIZATION PIPELINE:")
+
+    harmonization_methods = ['n4_bias_correction', 'z_score_harmonization']
+    print(f"Implementing: {', '.join(harmonization_methods)}")
+
+    # Create harmonization reference for z-score standardization
+    harmonization_reference = {}
+    for modality in dataset_properties['modalities']:
+        if modality in normalization_params:
+            harmonization_reference[modality] = {
+                'target_mean': 0.0,
+                'target_std': 1.0,
+                'clip_percentiles': [
+                    normalization_params[modality]['clip_lower'],
+                    normalization_params[modality]['clip_upper']
+                ]
+            }
+
+    # Save harmonization parameters
+    harmonization_config = {
+        'methods': harmonization_methods,
+        'harmonization_reference': harmonization_reference,
+        'n4_parameters': {
+            'max_iterations': [50, 50, 30, 20],
+            'convergence_threshold': 1e-6,
+            'bspline_fitting_distance': 300,
+            'shrink_factor': 3
+        }
+    }
+
+    with open(results_dir / 'harmonization_config.json', 'w') as f:
+        json.dump(harmonization_config, f, indent=2)
+
+    print("✅ Multi-site harmonization parameters configured")
