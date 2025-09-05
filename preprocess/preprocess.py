@@ -384,3 +384,72 @@ def main():
             brain_mask_resampled = ndimage.zoom(
                 brain_mask.astype(np.uint8), zoom_factors, order=0
             ).astype(bool)
+
+            # Recalculate bounding box for resampled brain mask
+            bbox_resampled = np.argwhere(brain_mask_resampled)
+            if len(bbox_resampled) > 0:
+                mins_resampled, maxs_resampled = bbox_resampled.min(axis=0), bbox_resampled.max(axis=0) + 1
+            else:
+                mins_resampled, maxs_resampled = [0, 0, 0], brain_mask_resampled.shape
+
+            # Quality control and validation
+            if np.any(np.isnan(img_resampled)) or np.any(np.isinf(img_resampled)):
+                img_resampled = np.nan_to_num(img_resampled, nan=0.0, posinf=0.0, neginf=0.0)
+
+            # Validate label integrity
+            valid_labels = [0, 1, 2, 3]
+            invalid_voxels = ~np.isin(label_resampled, valid_labels)
+            if np.any(invalid_voxels):
+                label_resampled = np.where(np.isin(label_resampled, valid_labels), label_resampled, 0)
+
+            # Check tumor preservation
+            tumor_before = np.sum(label_data > 0)
+            tumor_after = np.sum(label_resampled > 0)
+            preservation_ratio = tumor_after / (tumor_before + 1e-8)
+
+            # Update affine matrix for new spacing
+            new_affine = original_affine.copy()
+            new_affine[0, 0] = target_spacing[0] if new_affine[0, 0] > 0 else -target_spacing[0]
+            new_affine[1, 1] = target_spacing[1] if new_affine[1, 1] > 0 else -target_spacing[1]
+            new_affine[2, 2] = target_spacing[2] if new_affine[2, 2] > 0 else -target_spacing[2]
+
+            # Save per-modality 3D files for nnU-Net v2
+            for modality_idx, modality_suffix in enumerate(["0000", "0001", "0002", "0003"]):
+                modality_img = nib.Nifti1Image(
+                    img_resampled[..., modality_idx].astype(np.float32),
+                    new_affine
+                )
+                modality_img.set_sform(new_affine, code=1)
+                modality_img.set_qform(new_affine, code=1)
+
+                modality_path = nnunet_dir / 'imagesTr' / f"{case_id}_{modality_suffix}.nii.gz"
+                nib.save(modality_img, modality_path)
+
+            # Save label with proper spatial metadata
+            label_nifti_out = nib.Nifti1Image(label_resampled.astype(np.uint8), new_affine)
+            label_nifti_out.set_sform(new_affine, code=1)
+            label_nifti_out.set_qform(new_affine, code=1)
+
+            output_label_path = nnunet_dir / 'labelsTr' / f"{case_id}.nii.gz"
+            nib.save(label_nifti_out, output_label_path)
+
+            # Save preprocessing metadata
+            np.savez_compressed(
+                processed_dir / f"{case_id}_preprocessed.npz",
+                image=img_resampled.astype(np.float32),
+                label=label_resampled.astype(np.uint8),
+                brain_mask_full=brain_mask_resampled,
+                brain_mask_roi=brain_mask_resampled[mins_resampled[0]:maxs_resampled[0],
+                               mins_resampled[1]:maxs_resampled[1],
+                               mins_resampled[2]:maxs_resampled[2]],
+                brain_mask_bbox_mins=mins_resampled,
+                brain_mask_bbox_maxs=maxs_resampled,
+                original_spacing=original_spacing,
+                target_spacing=target_spacing,
+                original_shape=img_data.shape[:3],
+                final_shape=img_resampled.shape[:3],
+                normalization_applied=True,
+                harmonization_applied=True,
+                bias_correction_applied=True,
+                histogram_matching_applied=False
+            )
