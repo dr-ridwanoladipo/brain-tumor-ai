@@ -232,6 +232,82 @@ class nnUNet2025(nn.Module):
         return main_out, ds2, ds3
 
 
+def calculate_wt_dice(model, val_loader, device, amp_enabled, amp_dtype):
+    """Calculate validation WT Dice score"""
+    if val_loader is None:
+        return 0.0
+
+    model.eval()
+    dice_scores = []
+
+    with torch.no_grad():
+        for imgs, lbls in val_loader:
+            imgs = imgs.to(device, non_blocking=True)
+            lbls = lbls.to(device, non_blocking=True)
+
+            # Forward pass
+            with autocast(enabled=amp_enabled, dtype=amp_dtype):
+                outputs = model(imgs)
+                main_out = outputs[0] if isinstance(outputs, tuple) else outputs
+
+            # Convert to predictions
+            preds = torch.argmax(main_out, dim=1)
+
+            # Calculate WT Dice (labels > 0)
+            wt_pred = (preds > 0).float()
+            wt_true = (lbls > 0).float()
+
+            # Dice calculation per batch
+            for i in range(wt_pred.shape[0]):
+                pred_i = wt_pred[i].flatten()
+                true_i = wt_true[i].flatten()
+
+                intersection = (pred_i * true_i).sum()
+                union = pred_i.sum() + true_i.sum()
+
+                if union > 0:
+                    dice = (2.0 * intersection) / union
+                    dice_scores.append(dice.item())
+
+    model.train()
+    return np.mean(dice_scores) if dice_scores else 0.0
+
+
+def region_weighted_dice_loss(logits, targets, class_weights, out_channels, eps=1e-6):
+    probs = F.softmax(logits, dim=1)
+    targets_one_hot = F.one_hot(targets, num_classes=out_channels).permute(0, 4, 1, 2, 3).float()
+
+    dims = (0, 2, 3, 4)
+    intersection = (probs * targets_one_hot).sum(dims)
+    cardinality = (probs ** 2).sum(dims) + (targets_one_hot ** 2).sum(dims)
+    dice_per_class = (2.0 * intersection + eps) / (cardinality + eps)
+
+    weighted_dice = (dice_per_class * class_weights).sum() / class_weights.sum()
+    return 1.0 - weighted_dice
+
+
+def deep_supervision_loss(outputs, targets, class_weights, ce_weights, dice_weight, ce_weight, out_channels):
+    main_out, ds2, ds3 = outputs
+
+    # Main loss
+    dice_loss = region_weighted_dice_loss(main_out, targets, class_weights, out_channels)
+    ce_loss = F.cross_entropy(main_out, targets, weight=ce_weights)
+    main_loss = dice_weight * dice_loss + ce_weight * ce_loss
+
+    # Deep supervision losses
+    targets_ds2 = F.interpolate(targets.float().unsqueeze(1), scale_factor=0.5, mode='nearest').squeeze(1).long()
+    targets_ds3 = F.interpolate(targets.float().unsqueeze(1), scale_factor=0.25, mode='nearest').squeeze(1).long()
+
+    ds2_loss = F.cross_entropy(ds2, targets_ds2, weight=ce_weights) + region_weighted_dice_loss(ds2, targets_ds2,
+                                                                                                class_weights,
+                                                                                                out_channels)
+    ds3_loss = F.cross_entropy(ds3, targets_ds3, weight=ce_weights) + region_weighted_dice_loss(ds3, targets_ds3,
+                                                                                                class_weights,
+                                                                                                out_channels)
+
+    return main_loss + 0.5 * ds2_loss + 0.25 * ds3_loss
+
+
 def main():
     # Parse SageMaker arguments
     parser = argparse.ArgumentParser()
