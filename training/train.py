@@ -150,6 +150,88 @@ class BrainTumorDataset(Dataset):
         return img_patch, lbl_patch
 
 
+def conv_block(in_f, out_f):
+    return nn.Sequential(
+        nn.Conv3d(in_f, out_f, 3, padding=1, bias=False),
+        nn.InstanceNorm3d(out_f),
+        nn.LeakyReLU(0.01, inplace=True),
+        nn.Conv3d(out_f, out_f, 3, padding=1, bias=False),
+        nn.InstanceNorm3d(out_f),
+        nn.LeakyReLU(0.01, inplace=True)
+    )
+
+
+def down_block(in_f, out_f):
+    return nn.Sequential(
+        nn.Conv3d(in_f, out_f, 3, stride=2, padding=1, bias=False),
+        nn.InstanceNorm3d(out_f),
+        nn.LeakyReLU(0.01, inplace=True)
+    )
+
+
+def up_block(in_f, out_f):
+    return nn.Sequential(
+        nn.ConvTranspose3d(in_f, out_f, 2, stride=2, bias=False),
+        nn.InstanceNorm3d(out_f),
+        nn.LeakyReLU(0.01, inplace=True)
+    )
+
+
+class nnUNet2025(nn.Module):
+    def __init__(self, in_channels, out_channels, base_filters):
+        super().__init__()
+        # 5-level encoder
+        self.enc1 = conv_block(in_channels, base_filters)
+        self.down1 = down_block(base_filters, base_filters * 2)
+        self.enc2 = conv_block(base_filters * 2, base_filters * 2)
+        self.down2 = down_block(base_filters * 2, base_filters * 4)
+        self.enc3 = conv_block(base_filters * 4, base_filters * 4)
+        self.down3 = down_block(base_filters * 4, base_filters * 8)
+        self.enc4 = conv_block(base_filters * 8, base_filters * 8)
+        self.down4 = down_block(base_filters * 8, base_filters * 16)
+
+        # Bottleneck
+        self.bottleneck = conv_block(base_filters * 16, base_filters * 16)
+
+        # 5-level decoder
+        self.up4 = up_block(base_filters * 16, base_filters * 8)
+        self.dec4 = conv_block(base_filters * 16, base_filters * 8)
+        self.up3 = up_block(base_filters * 8, base_filters * 4)
+        self.dec3 = conv_block(base_filters * 8, base_filters * 4)
+        self.up2 = up_block(base_filters * 4, base_filters * 2)
+        self.dec2 = conv_block(base_filters * 4, base_filters * 2)
+        self.up1 = up_block(base_filters * 2, base_filters)
+        self.dec1 = conv_block(base_filters * 2, base_filters)
+
+        # Output layers
+        self.out_conv = nn.Conv3d(base_filters, out_channels, 1)
+        self.ds_out2 = nn.Conv3d(base_filters * 2, out_channels, 1)
+        self.ds_out3 = nn.Conv3d(base_filters * 4, out_channels, 1)
+
+    def forward(self, x):
+        # Encoder
+        e1 = self.enc1(x)
+        e2 = self.enc2(self.down1(e1))
+        e3 = self.enc3(self.down2(e2))
+        e4 = self.enc4(self.down3(e3))
+
+        # Bottleneck
+        b = self.bottleneck(self.down4(e4))
+
+        # Decoder
+        d4 = self.dec4(torch.cat([self.up4(b), e4], dim=1))
+        d3 = self.dec3(torch.cat([self.up3(d4), e3], dim=1))
+        d2 = self.dec2(torch.cat([self.up2(d3), e2], dim=1))
+        d1 = self.dec1(torch.cat([self.up1(d2), e1], dim=1))
+
+        # Outputs
+        main_out = self.out_conv(d1)
+        ds2 = self.ds_out2(d2)
+        ds3 = self.ds_out3(d3)
+
+        return main_out, ds2, ds3
+
+
 def main():
     # Parse SageMaker arguments
     parser = argparse.ArgumentParser()
