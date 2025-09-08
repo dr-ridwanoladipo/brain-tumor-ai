@@ -1,0 +1,6 @@
+numpy
+nibabel
+tqdm
+scipy
+boto3
+sagemaker
