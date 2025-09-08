@@ -66,7 +66,7 @@ def submit_brain_preprocess_job(test_mode=True):
     # Create PyTorch estimator
     estimator = PyTorch(
         entry_point='preprocess.py',
-        source_dir='preprocess/',
+        source_dir='../preprocess/',
         role=role,
         instance_count=1,
         instance_type='ml.r5.2xlarge',
@@ -138,7 +138,7 @@ def upload_source_code():
     print("  • ./preprocess/preprocess.py")
     print("  • ./preprocess/requirements.txt")
 
-    required_files = ['preprocess/preprocess.py', 'preprocess/requirements.txt']
+    required_files = ['../preprocess/preprocess.py', '../preprocess/requirements.txt']
     missing_files = [f for f in required_files if not os.path.exists(f)]
 
     if missing_files:
