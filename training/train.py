@@ -599,7 +599,29 @@ def calculate_wt_dice(model, val_loader, device, amp_enabled, amp_dtype):
 
                     print(f"✅ New best model saved at epoch {epoch + 1}: Loss = {avg_loss:.4f}")
 
-            # Progress logging placeholder
+            # Rolling checkpoint
+            if (epoch + 1) % save_every == 0:
+                elapsed_this_run = (time.time() - run_start_time) / 3600
+                torch.save({
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict(),
+                    'epoch': epoch,
+                    'train_loss': avg_loss,
+                    'val_dice': val_dice if USE_FULL_DATASET else 0.0,
+                    'train_losses': train_losses,
+                    'val_dice_scores': val_dice_scores,
+                    'best_dice': best_dice,
+                    'best_loss': best_loss,
+                    'epochs_without_improvement': epochs_without_improvement,
+                    'cumulative_hours': cumulative_hours + elapsed_this_run,
+                    'last_improvement_time': last_improvement_time
+                }, checkpoint_dir / 'checkpoint_latest.pth')
+
+                if not USE_FULL_DATASET:
+                    print(f"📝 Overwriting rolling checkpoint (checkpoint_latest.pth) at epoch {epoch + 1}")
+
+            # Progress logging
             if epoch % 25 == 0:
                 elapsed_hours_total = cumulative_hours + ((time.time() - run_start_time) / 3600)
                 hours_since_improvement = (time.time() - last_improvement_time) / 3600
@@ -615,5 +637,25 @@ def calculate_wt_dice(model, val_loader, device, amp_enabled, amp_dtype):
                           f"Time total: {elapsed_hours_total:.1f}h | "
                           f"Since improvement: {hours_since_improvement:.1f}h")
 
-        if __name__ == "__main__":
-            main()
+            # Early stopping logic (full dataset only)
+            if USE_FULL_DATASET:
+                elapsed_hours_total = cumulative_hours + ((time.time() - run_start_time) / 3600)
+                hours_since_improvement = (time.time() - last_improvement_time) / 3600
+
+                # Check stopping conditions
+                time_patience_exceeded = hours_since_improvement >= patience_hours and epochs_without_improvement > 0
+                epoch_patience_exceeded = epochs_without_improvement >= patience_epochs
+                max_time_reached = elapsed_hours_total >= max_hours
+
+                if time_patience_exceeded or epoch_patience_exceeded or max_time_reached:
+                    reason = "time patience" if time_patience_exceeded else \
+                        "epoch patience" if epoch_patience_exceeded else "max time"
+                    print(f"\nEarly stopping triggered ({reason})")
+                    print(f"Final: Best WT Dice = {best_dice:.4f}, "
+                          f"Training time total = {elapsed_hours_total:.1f}h, "
+                          f"Hours since improvement = {hours_since_improvement:.1f}h")
+                    break
+
+
+if __name__ == "__main__":
+    main()
