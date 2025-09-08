@@ -458,5 +458,62 @@ def calculate_wt_dice(model, val_loader, device, amp_enabled, amp_dtype):
         print(f"Training loader ready - Workers: {NUM_WORKERS}, Prefetch: {PREFETCH}")
         print(f"Train: {len(train_dataset)} patches, {len(train_loader)} batches per epoch")
 
+        # Model
+        model = nnUNet2025(in_channels, out_channels, base_filters).to(device)
+        print(f"nnU-Net 2025 ready - {sum(p.numel() for p in model.parameters()):,} parameters")
+
+        # Optimizer and scheduler
+        optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+        scaler = GradScaler()
+
+        print("Loss function and optimizer ready")
+
+        # Training loop initialization
+        train_losses = []
+        val_dice_scores = []
+        best_dice = 0.0
+        best_loss = float('inf')
+        epochs_without_improvement = 0
+
+        # Early stopping parameters (only for full dataset)
+        if USE_FULL_DATASET:
+            max_hours = 17.0
+            patience_epochs = 50
+            patience_hours = 4.0
+            print(
+                f"Early stopping enabled - Max: {max_hours}h, Patience: {patience_epochs} epochs or {patience_hours}h")
+
+        # Check for existing checkpoints
+        start_epoch = 0
+        checkpoint_files = list(checkpoint_dir.glob('checkpoint_latest.pth'))
+        if checkpoint_files:
+            checkpoint = torch.load(checkpoint_files[0], map_location=device)
+
+            model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            start_epoch = checkpoint['epoch'] + 1
+            train_losses = checkpoint.get('train_losses', [])
+            val_dice_scores = checkpoint.get('val_dice_scores', [])
+            best_dice = checkpoint.get('best_dice', 0.0)
+            best_loss = checkpoint.get('best_loss', float('inf'))
+            epochs_without_improvement = checkpoint.get('epochs_without_improvement', 0)
+
+            # cumulative training hours
+            cumulative_hours = checkpoint.get('cumulative_hours', 0.0)
+            run_start_time = time.time()
+
+            # time of last improvement
+            last_improvement_time = checkpoint.get('last_improvement_time', time.time())
+
+            print(f"Resumed from checkpoint at epoch {start_epoch}, "
+                  f"cumulative hours: {cumulative_hours:.2f}, "
+                  f"epochs_without_improvement: {epochs_without_improvement}")
+        else:
+            cumulative_hours = 0.0
+            run_start_time = time.time()
+            last_improvement_time = time.time()
+
     if __name__ == "__main__":
         main()
