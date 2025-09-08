@@ -269,82 +269,194 @@ def calculate_wt_dice(model, val_loader, device, amp_enabled, amp_dtype):
                     dice = (2.0 * intersection) / union
                     dice_scores.append(dice.item())
 
-    model.train()
-    return np.mean(dice_scores) if dice_scores else 0.0
+        model.train()
+        return np.mean(dice_scores) if dice_scores else 0.0
 
+    def region_weighted_dice_loss(logits, targets, class_weights, out_channels, eps=1e-6):
+        probs = F.softmax(logits, dim=1)
+        targets_one_hot = F.one_hot(targets, num_classes=out_channels).permute(0, 4, 1, 2, 3).float()
 
-def region_weighted_dice_loss(logits, targets, class_weights, out_channels, eps=1e-6):
-    probs = F.softmax(logits, dim=1)
-    targets_one_hot = F.one_hot(targets, num_classes=out_channels).permute(0, 4, 1, 2, 3).float()
+        dims = (0, 2, 3, 4)
+        intersection = (probs * targets_one_hot).sum(dims)
+        cardinality = (probs ** 2).sum(dims) + (targets_one_hot ** 2).sum(dims)
+        dice_per_class = (2.0 * intersection + eps) / (cardinality + eps)
 
-    dims = (0, 2, 3, 4)
-    intersection = (probs * targets_one_hot).sum(dims)
-    cardinality = (probs ** 2).sum(dims) + (targets_one_hot ** 2).sum(dims)
-    dice_per_class = (2.0 * intersection + eps) / (cardinality + eps)
+        weighted_dice = (dice_per_class * class_weights).sum() / class_weights.sum()
+        return 1.0 - weighted_dice
 
-    weighted_dice = (dice_per_class * class_weights).sum() / class_weights.sum()
-    return 1.0 - weighted_dice
+    def deep_supervision_loss(outputs, targets, class_weights, ce_weights, dice_weight, ce_weight, out_channels):
+        main_out, ds2, ds3 = outputs
 
+        # Main loss
+        dice_loss = region_weighted_dice_loss(main_out, targets, class_weights, out_channels)
+        ce_loss = F.cross_entropy(main_out, targets, weight=ce_weights)
+        main_loss = dice_weight * dice_loss + ce_weight * ce_loss
 
-def deep_supervision_loss(outputs, targets, class_weights, ce_weights, dice_weight, ce_weight, out_channels):
-    main_out, ds2, ds3 = outputs
+        # Deep supervision losses
+        targets_ds2 = F.interpolate(targets.float().unsqueeze(1), scale_factor=0.5, mode='nearest').squeeze(1).long()
+        targets_ds3 = F.interpolate(targets.float().unsqueeze(1), scale_factor=0.25, mode='nearest').squeeze(1).long()
 
-    # Main loss
-    dice_loss = region_weighted_dice_loss(main_out, targets, class_weights, out_channels)
-    ce_loss = F.cross_entropy(main_out, targets, weight=ce_weights)
-    main_loss = dice_weight * dice_loss + ce_weight * ce_loss
+        ds2_loss = F.cross_entropy(ds2, targets_ds2, weight=ce_weights) + region_weighted_dice_loss(ds2, targets_ds2,
+                                                                                                    class_weights,
+                                                                                                    out_channels)
+        ds3_loss = F.cross_entropy(ds3, targets_ds3, weight=ce_weights) + region_weighted_dice_loss(ds3, targets_ds3,
+                                                                                                    class_weights,
+                                                                                                    out_channels)
 
-    # Deep supervision losses
-    targets_ds2 = F.interpolate(targets.float().unsqueeze(1), scale_factor=0.5, mode='nearest').squeeze(1).long()
-    targets_ds3 = F.interpolate(targets.float().unsqueeze(1), scale_factor=0.25, mode='nearest').squeeze(1).long()
+        return main_loss + 0.5 * ds2_loss + 0.25 * ds3_loss
 
-    ds2_loss = F.cross_entropy(ds2, targets_ds2, weight=ce_weights) + region_weighted_dice_loss(ds2, targets_ds2,
-                                                                                                class_weights,
-                                                                                                out_channels)
-    ds3_loss = F.cross_entropy(ds3, targets_ds3, weight=ce_weights) + region_weighted_dice_loss(ds3, targets_ds3,
-                                                                                                class_weights,
-                                                                                                out_channels)
+    def main():
+        # Parse SageMaker arguments
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--data-dir', type=str, default='/opt/ml/input/data/training')
+        parser.add_argument('--output-dir', type=str, default='/opt/ml/output')
+        parser.add_argument('--model-dir', type=str, default='/opt/ml/model')
+        parser.add_argument('--checkpoint-dir', type=str, default='/opt/ml/checkpoints')
+        parser.add_argument('--use-full-dataset', action='store_true')
+        parser.add_argument('--no-use-full-dataset', dest='use_full_dataset', action='store_false')
+        parser.set_defaults(use_full_dataset=True)
+        parser.add_argument('--max-volumes', type=int, default=None)
+        parser.add_argument('--random-seed', type=int, default=42)
+        args = parser.parse_args()
 
-    return main_loss + 0.5 * ds2_loss + 0.25 * ds3_loss
+        # Set paths for SageMaker
+        data_dir = Path(args.data_dir)
+        base_dir = Path(args.output_dir)
+        model_dir = Path(args.model_dir)
+        checkpoint_dir = Path(args.checkpoint_dir)
 
+        # Dataset configuration
+        USE_FULL_DATASET = args.use_full_dataset
+        MAX_VOLUMES = args.max_volumes
+        RANDOM_SEED = args.random_seed
 
-def main():
-    # Parse SageMaker arguments
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--data-dir', type=str, default='/opt/ml/input/data/training')
-    parser.add_argument('--output-dir', type=str, default='/opt/ml/output')
-    parser.add_argument('--model-dir', type=str, default='/opt/ml/model')
-    parser.add_argument('--checkpoint-dir', type=str, default='/opt/ml/checkpoints')
-    parser.add_argument('--use-full-dataset', action='store_true')
-    parser.add_argument('--no-use-full-dataset', dest='use_full_dataset', action='store_false')
-    parser.set_defaults(use_full_dataset=True)
-    parser.add_argument('--max-volumes', type=int, default=None)
-    parser.add_argument('--random-seed', type=int, default=42)
-    args = parser.parse_args()
+        print(f"Brain Tumor Training Pipeline - SageMaker")
+        print(f"Data directory: {data_dir}")
+        print(f"Output directory: {base_dir}")
+        print(f"Model directory: {model_dir}")
+        print(f"Using {'FULL' if USE_FULL_DATASET else MAX_VOLUMES} volumes")
+        print(f"Target: WT Dice ≥ 90, BraTS Avg ≥ 80")
 
-    # Set paths for SageMaker
-    data_dir = Path(args.data_dir)
-    base_dir = Path(args.output_dir)
-    model_dir = Path(args.model_dir)
-    checkpoint_dir = Path(args.checkpoint_dir)
+        # Create directories
+        output_dir = base_dir / 'outputs'
+        for directory in [base_dir, output_dir, model_dir, checkpoint_dir]:
+            directory.mkdir(exist_ok=True, parents=True)
 
-    # Dataset configuration
-    USE_FULL_DATASET = args.use_full_dataset
-    MAX_VOLUMES = args.max_volumes
-    RANDOM_SEED = args.random_seed
+        # Reproducibility and GPU optimization
+        torch.manual_seed(RANDOM_SEED)
+        np.random.seed(RANDOM_SEED)
+        random.seed(RANDOM_SEED)
 
-    print(f"Brain Tumor Training Pipeline - SageMaker")
-    print(f"Data directory: {data_dir}")
-    print(f"Output directory: {base_dir}")
-    print(f"Model directory: {model_dir}")
-    print(f"Using {'FULL' if USE_FULL_DATASET else MAX_VOLUMES} volumes")
-    print(f"Target: WT Dice ≥ 90, BraTS Avg ≥ 80")
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(RANDOM_SEED)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = True
+            torch.set_float32_matmul_precision("high")
 
-    # Create directories
-    output_dir = base_dir / 'outputs'
-    for directory in [base_dir, output_dir, model_dir, checkpoint_dir]:
-        directory.mkdir(exist_ok=True, parents=True)
+        # AMP settings
+        amp_enabled = torch.cuda.is_available()
+        amp_dtype = torch.bfloat16 if amp_enabled and torch.cuda.get_device_capability()[0] >= 8 else torch.float16
 
+        print(f"Using {device} - {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
+        if torch.cuda.is_available():
+            print(f"Memory: {torch.cuda.get_device_properties(0).total_memory / 1024 ** 3:.1f} GB")
+        print(f"AMP: {amp_dtype}")
 
-if __name__ == "__main__":
-    main()
+        # Configuration
+        patch_size = (96, 96, 96)
+        batch_size = 2
+        in_channels = 4
+        out_channels = 4
+        base_filters = 32
+
+        # Training parameters
+        if USE_FULL_DATASET:
+            epochs = 1000
+            patches_per_epoch = 250
+            save_every = 1
+            lr = 3e-4
+        else:
+            epochs = 100
+            patches_per_epoch = 50
+            save_every = 1
+            lr = 1e-3
+
+        weight_decay = 3e-5
+        dice_weight = 0.5
+        ce_weight = 0.5
+
+        # Class weights
+        class_weights = torch.tensor([0.0, 1.0, 1.5, 2.0], device=device)
+        ce_weights = torch.tensor([0.1, 1.0, 1.5, 2.0], device=device)
+
+        print(f"Config - Mode: {'FULL' if USE_FULL_DATASET else 'TEST'}, Patch: {patch_size}")
+
+        # Load preprocessed data
+        npz_files = list(data_dir.glob('*_preprocessed.npz'))
+        if len(npz_files) == 0:
+            raise RuntimeError("No preprocessed .npz files found in data_dir")
+
+        # Dataset split
+        if USE_FULL_DATASET:
+            # Reproducible splitting
+            random.seed(RANDOM_SEED)
+            np.random.seed(RANDOM_SEED)
+            random.shuffle(npz_files)
+
+            # 80/10/10 split for medical AI standard
+            n = len(npz_files)
+            train_end = int(0.8 * n)
+            val_end = train_end + int(0.1 * n)
+
+            train_files = npz_files[:train_end]
+            val_files = npz_files[train_end:val_end]
+            test_files = npz_files[val_end:]
+
+            print(f"Dataset split - Train: {len(train_files)}, Val: {len(val_files)}, Test: {len(test_files)}")
+
+            # Save dataset split
+            with open(model_dir / "dataset_split.json", "w") as f:
+                json.dump({
+                    "train": [str(p) for p in train_files],
+                    "val": [str(p) for p in val_files],
+                    "test": [str(p) for p in test_files]
+                }, f, indent=2)
+            print("Dataset split saved")
+        else:
+            # Single volume testing
+            train_files = npz_files[:MAX_VOLUMES]
+            val_files = None
+            test_files = None
+            print(f"Test mode - Using {len(train_files)} volumes")
+
+        # Create datasets and loaders
+        train_dataset = BrainTumorDataset(train_files, patch_size, patches_per_epoch)
+
+        # Worker configuration
+        cpu_cnt = os.cpu_count() or 2
+        NUM_WORKERS = 2 if cpu_cnt <= 4 else min(8, cpu_cnt // 2)
+        PREFETCH = 2
+
+        train_loader = DataLoader(
+            train_dataset, batch_size=batch_size, shuffle=True, num_workers=NUM_WORKERS,
+            pin_memory=True, prefetch_factor=PREFETCH, persistent_workers=(NUM_WORKERS > 0),
+            worker_init_fn=worker_init_fn, drop_last=True
+        )
+
+        # Validation loader for full dataset only
+        val_loader = None
+        if USE_FULL_DATASET and val_files:
+            val_dataset = BrainTumorDataset(val_files, patch_size, patches_per_epoch)
+            val_loader = DataLoader(
+                val_dataset, batch_size=batch_size, shuffle=False, num_workers=NUM_WORKERS,
+                pin_memory=True, prefetch_factor=PREFETCH, persistent_workers=(NUM_WORKERS > 0),
+                worker_init_fn=worker_init_fn, drop_last=False
+            )
+            print(f"Validation loader ready - {len(val_dataset)} patches")
+
+        print(f"Training loader ready - Workers: {NUM_WORKERS}, Prefetch: {PREFETCH}")
+        print(f"Train: {len(train_dataset)} patches, {len(train_loader)} batches per epoch")
+
+    if __name__ == "__main__":
+        main()
