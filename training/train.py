@@ -269,393 +269,442 @@ def calculate_wt_dice(model, val_loader, device, amp_enabled, amp_dtype):
                     dice = (2.0 * intersection) / union
                     dice_scores.append(dice.item())
 
-        model.train()
-        return np.mean(dice_scores) if dice_scores else 0.0
+    model.train()
+    return np.mean(dice_scores) if dice_scores else 0.0
 
-    def region_weighted_dice_loss(logits, targets, class_weights, out_channels, eps=1e-6):
-        probs = F.softmax(logits, dim=1)
-        targets_one_hot = F.one_hot(targets, num_classes=out_channels).permute(0, 4, 1, 2, 3).float()
 
-        dims = (0, 2, 3, 4)
-        intersection = (probs * targets_one_hot).sum(dims)
-        cardinality = (probs ** 2).sum(dims) + (targets_one_hot ** 2).sum(dims)
-        dice_per_class = (2.0 * intersection + eps) / (cardinality + eps)
+def region_weighted_dice_loss(logits, targets, class_weights, out_channels, eps=1e-6):
+    probs = F.softmax(logits, dim=1)
+    targets_one_hot = F.one_hot(targets, num_classes=out_channels).permute(0, 4, 1, 2, 3).float()
 
-        weighted_dice = (dice_per_class * class_weights).sum() / class_weights.sum()
-        return 1.0 - weighted_dice
+    dims = (0, 2, 3, 4)
+    intersection = (probs * targets_one_hot).sum(dims)
+    cardinality = (probs ** 2).sum(dims) + (targets_one_hot ** 2).sum(dims)
+    dice_per_class = (2.0 * intersection + eps) / (cardinality + eps)
 
-    def deep_supervision_loss(outputs, targets, class_weights, ce_weights, dice_weight, ce_weight, out_channels):
-        main_out, ds2, ds3 = outputs
+    weighted_dice = (dice_per_class * class_weights).sum() / class_weights.sum()
+    return 1.0 - weighted_dice
 
-        # Main loss
-        dice_loss = region_weighted_dice_loss(main_out, targets, class_weights, out_channels)
-        ce_loss = F.cross_entropy(main_out, targets, weight=ce_weights)
-        main_loss = dice_weight * dice_loss + ce_weight * ce_loss
 
-        # Deep supervision losses
-        targets_ds2 = F.interpolate(targets.float().unsqueeze(1), scale_factor=0.5, mode='nearest').squeeze(1).long()
-        targets_ds3 = F.interpolate(targets.float().unsqueeze(1), scale_factor=0.25, mode='nearest').squeeze(1).long()
+def deep_supervision_loss(outputs, targets, class_weights, ce_weights, dice_weight, ce_weight, out_channels):
+    main_out, ds2, ds3 = outputs
 
-        ds2_loss = F.cross_entropy(ds2, targets_ds2, weight=ce_weights) + region_weighted_dice_loss(ds2, targets_ds2,
-                                                                                                    class_weights,
-                                                                                                    out_channels)
-        ds3_loss = F.cross_entropy(ds3, targets_ds3, weight=ce_weights) + region_weighted_dice_loss(ds3, targets_ds3,
-                                                                                                    class_weights,
-                                                                                                    out_channels)
+    # Main loss
+    dice_loss = region_weighted_dice_loss(main_out, targets, class_weights, out_channels)
+    ce_loss = F.cross_entropy(main_out, targets, weight=ce_weights)
+    main_loss = dice_weight * dice_loss + ce_weight * ce_loss
 
-        return main_loss + 0.5 * ds2_loss + 0.25 * ds3_loss
+    # Deep supervision losses
+    targets_ds2 = F.interpolate(targets.float().unsqueeze(1), scale_factor=0.5, mode='nearest').squeeze(1).long()
+    targets_ds3 = F.interpolate(targets.float().unsqueeze(1), scale_factor=0.25, mode='nearest').squeeze(1).long()
 
-    def main():
-        # Parse SageMaker arguments
-        parser = argparse.ArgumentParser()
-        parser.add_argument('--data-dir', type=str, default='/opt/ml/input/data/training')
-        parser.add_argument('--output-dir', type=str, default='/opt/ml/output')
-        parser.add_argument('--model-dir', type=str, default='/opt/ml/model')
-        parser.add_argument('--checkpoint-dir', type=str, default='/opt/ml/checkpoints')
-        parser.add_argument('--use-full-dataset', action='store_true')
-        parser.add_argument('--no-use-full-dataset', dest='use_full_dataset', action='store_false')
-        parser.set_defaults(use_full_dataset=True)
-        parser.add_argument('--max-volumes', type=int, default=None)
-        parser.add_argument('--random-seed', type=int, default=42)
-        args = parser.parse_args()
+    ds2_loss = F.cross_entropy(ds2, targets_ds2, weight=ce_weights) + region_weighted_dice_loss(ds2, targets_ds2,
+                                                                                                class_weights,
+                                                                                                out_channels)
+    ds3_loss = F.cross_entropy(ds3, targets_ds3, weight=ce_weights) + region_weighted_dice_loss(ds3, targets_ds3,
+                                                                                                class_weights,
+                                                                                                out_channels)
 
-        # Set paths for SageMaker
-        data_dir = Path(args.data_dir)
-        base_dir = Path(args.output_dir)
-        model_dir = Path(args.model_dir)
-        checkpoint_dir = Path(args.checkpoint_dir)
+    return main_loss + 0.5 * ds2_loss + 0.25 * ds3_loss
 
-        # Dataset configuration
-        USE_FULL_DATASET = args.use_full_dataset
-        MAX_VOLUMES = args.max_volumes
-        RANDOM_SEED = args.random_seed
 
-        print(f"Brain Tumor Training Pipeline - SageMaker")
-        print(f"Data directory: {data_dir}")
-        print(f"Output directory: {base_dir}")
-        print(f"Model directory: {model_dir}")
-        print(f"Using {'FULL' if USE_FULL_DATASET else MAX_VOLUMES} volumes")
-        print(f"Target: WT Dice ≥ 90, BraTS Avg ≥ 80")
+def main():
+    # Parse SageMaker arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data-dir', type=str, default='/opt/ml/input/data/training')
+    parser.add_argument('--output-dir', type=str, default='/opt/ml/output')
+    parser.add_argument('--model-dir', type=str, default='/opt/ml/model')
+    parser.add_argument('--checkpoint-dir', type=str, default='/opt/ml/checkpoints')
+    parser.add_argument('--use-full-dataset', action='store_true')
+    parser.add_argument('--no-use-full-dataset', dest='use_full_dataset', action='store_false')
+    parser.set_defaults(use_full_dataset=True)
+    parser.add_argument('--max-volumes', type=int, default=None)
+    parser.add_argument('--random-seed', type=int, default=42)
+    args = parser.parse_args()
 
-        # Create directories
-        output_dir = base_dir / 'outputs'
-        for directory in [base_dir, output_dir, model_dir, checkpoint_dir]:
-            directory.mkdir(exist_ok=True, parents=True)
+    # Set paths for SageMaker
+    data_dir = Path(args.data_dir)
+    base_dir = Path(args.output_dir)
+    model_dir = Path(args.model_dir)
+    checkpoint_dir = Path(args.checkpoint_dir)
 
-        # Reproducibility and GPU optimization
-        torch.manual_seed(RANDOM_SEED)
-        np.random.seed(RANDOM_SEED)
+    # Dataset configuration
+    USE_FULL_DATASET = args.use_full_dataset
+    MAX_VOLUMES = args.max_volumes
+    RANDOM_SEED = args.random_seed
+
+    print(f"Brain Tumor Training Pipeline - SageMaker")
+    print(f"Data directory: {data_dir}")
+    print(f"Output directory: {base_dir}")
+    print(f"Model directory: {model_dir}")
+    print(f"Using {'FULL' if USE_FULL_DATASET else MAX_VOLUMES} volumes")
+    print(f"Target: WT Dice ≥ 90, BraTS Avg ≥ 80")
+
+    # Create directories
+    output_dir = base_dir / 'outputs'
+    for directory in [base_dir, output_dir, model_dir, checkpoint_dir]:
+        directory.mkdir(exist_ok=True, parents=True)
+
+    # Reproducibility and GPU optimization
+    torch.manual_seed(RANDOM_SEED)
+    np.random.seed(RANDOM_SEED)
+    random.seed(RANDOM_SEED)
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(RANDOM_SEED)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = True
+        torch.set_float32_matmul_precision("high")
+
+    # AMP settings
+    amp_enabled = torch.cuda.is_available()
+    amp_dtype = torch.bfloat16 if amp_enabled and torch.cuda.get_device_capability()[0] >= 8 else torch.float16
+
+    print(f"Using {device} - {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
+    if torch.cuda.is_available():
+        print(f"Memory: {torch.cuda.get_device_properties(0).total_memory / 1024 ** 3:.1f} GB")
+    print(f"AMP: {amp_dtype}")
+
+    # Configuration
+    patch_size = (96, 96, 96)
+    batch_size = 2
+    in_channels = 4
+    out_channels = 4
+    base_filters = 32
+
+    # Training parameters
+    if USE_FULL_DATASET:
+        epochs = 1000
+        patches_per_epoch = 250
+        save_every = 1
+        lr = 3e-4
+    else:
+        epochs = 100
+        patches_per_epoch = 50
+        save_every = 1
+        lr = 1e-3
+
+    weight_decay = 3e-5
+    dice_weight = 0.5
+    ce_weight = 0.5
+
+    # Class weights
+    class_weights = torch.tensor([0.0, 1.0, 1.5, 2.0], device=device)
+    ce_weights = torch.tensor([0.1, 1.0, 1.5, 2.0], device=device)
+
+    print(f"Config - Mode: {'FULL' if USE_FULL_DATASET else 'TEST'}, Patch: {patch_size}")
+
+    # Load preprocessed data
+    npz_files = list(data_dir.glob('*_preprocessed.npz'))
+    if len(npz_files) == 0:
+        raise RuntimeError("No preprocessed .npz files found in data_dir")
+
+    # Dataset split
+    if USE_FULL_DATASET:
+        # Reproducible splitting
         random.seed(RANDOM_SEED)
+        np.random.seed(RANDOM_SEED)
+        random.shuffle(npz_files)
 
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(RANDOM_SEED)
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = True
-            torch.set_float32_matmul_precision("high")
+        # 80/10/10 split for medical AI standard
+        n = len(npz_files)
+        train_end = int(0.8 * n)
+        val_end = train_end + int(0.1 * n)
 
-        # AMP settings
-        amp_enabled = torch.cuda.is_available()
-        amp_dtype = torch.bfloat16 if amp_enabled and torch.cuda.get_device_capability()[0] >= 8 else torch.float16
+        train_files = npz_files[:train_end]
+        val_files = npz_files[train_end:val_end]
+        test_files = npz_files[val_end:]
 
-        print(f"Using {device} - {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
-        if torch.cuda.is_available():
-            print(f"Memory: {torch.cuda.get_device_properties(0).total_memory / 1024 ** 3:.1f} GB")
-        print(f"AMP: {amp_dtype}")
+        print(f"Dataset split - Train: {len(train_files)}, Val: {len(val_files)}, Test: {len(test_files)}")
 
-        # Configuration
-        patch_size = (96, 96, 96)
-        batch_size = 2
-        in_channels = 4
-        out_channels = 4
-        base_filters = 32
+        # Save dataset split
+        with open(model_dir / "dataset_split.json", "w") as f:
+            json.dump({
+                "train": [str(p) for p in train_files],
+                "val": [str(p) for p in val_files],
+                "test": [str(p) for p in test_files]
+            }, f, indent=2)
+        print("Dataset split saved")
+    else:
+        # Single volume testing
+        train_files = npz_files[:MAX_VOLUMES]
+        val_files = None
+        test_files = None
+        print(f"Test mode - Using {len(train_files)} volumes")
 
-        # Training parameters
-        if USE_FULL_DATASET:
-            epochs = 1000
-            patches_per_epoch = 250
-            save_every = 1
-            lr = 3e-4
-        else:
-            epochs = 100
-            patches_per_epoch = 50
-            save_every = 1
-            lr = 1e-3
+    # Create datasets and loaders
+    train_dataset = BrainTumorDataset(train_files, patch_size, patches_per_epoch)
 
-        weight_decay = 3e-5
-        dice_weight = 0.5
-        ce_weight = 0.5
+    # Worker configuration
+    cpu_cnt = os.cpu_count() or 2
+    NUM_WORKERS = 2 if cpu_cnt <= 4 else min(8, cpu_cnt // 2)
+    PREFETCH = 2
 
-        # Class weights
-        class_weights = torch.tensor([0.0, 1.0, 1.5, 2.0], device=device)
-        ce_weights = torch.tensor([0.1, 1.0, 1.5, 2.0], device=device)
+    train_loader = DataLoader(
+        train_dataset, batch_size=batch_size, shuffle=True, num_workers=NUM_WORKERS,
+        pin_memory=True, prefetch_factor=PREFETCH, persistent_workers=(NUM_WORKERS > 0),
+        worker_init_fn=worker_init_fn, drop_last=True
+    )
 
-        print(f"Config - Mode: {'FULL' if USE_FULL_DATASET else 'TEST'}, Patch: {patch_size}")
-
-        # Load preprocessed data
-        npz_files = list(data_dir.glob('*_preprocessed.npz'))
-        if len(npz_files) == 0:
-            raise RuntimeError("No preprocessed .npz files found in data_dir")
-
-        # Dataset split
-        if USE_FULL_DATASET:
-            # Reproducible splitting
-            random.seed(RANDOM_SEED)
-            np.random.seed(RANDOM_SEED)
-            random.shuffle(npz_files)
-
-            # 80/10/10 split for medical AI standard
-            n = len(npz_files)
-            train_end = int(0.8 * n)
-            val_end = train_end + int(0.1 * n)
-
-            train_files = npz_files[:train_end]
-            val_files = npz_files[train_end:val_end]
-            test_files = npz_files[val_end:]
-
-            print(f"Dataset split - Train: {len(train_files)}, Val: {len(val_files)}, Test: {len(test_files)}")
-
-            # Save dataset split
-            with open(model_dir / "dataset_split.json", "w") as f:
-                json.dump({
-                    "train": [str(p) for p in train_files],
-                    "val": [str(p) for p in val_files],
-                    "test": [str(p) for p in test_files]
-                }, f, indent=2)
-            print("Dataset split saved")
-        else:
-            # Single volume testing
-            train_files = npz_files[:MAX_VOLUMES]
-            val_files = None
-            test_files = None
-            print(f"Test mode - Using {len(train_files)} volumes")
-
-        # Create datasets and loaders
-        train_dataset = BrainTumorDataset(train_files, patch_size, patches_per_epoch)
-
-        # Worker configuration
-        cpu_cnt = os.cpu_count() or 2
-        NUM_WORKERS = 2 if cpu_cnt <= 4 else min(8, cpu_cnt // 2)
-        PREFETCH = 2
-
-        train_loader = DataLoader(
-            train_dataset, batch_size=batch_size, shuffle=True, num_workers=NUM_WORKERS,
+    # Validation loader for full dataset only
+    val_loader = None
+    if USE_FULL_DATASET and val_files:
+        val_dataset = BrainTumorDataset(val_files, patch_size, patches_per_epoch)
+        val_loader = DataLoader(
+            val_dataset, batch_size=batch_size, shuffle=False, num_workers=NUM_WORKERS,
             pin_memory=True, prefetch_factor=PREFETCH, persistent_workers=(NUM_WORKERS > 0),
-            worker_init_fn=worker_init_fn, drop_last=True
+            worker_init_fn=worker_init_fn, drop_last=False
         )
+        print(f"Validation loader ready - {len(val_dataset)} patches")
 
-        # Validation loader for full dataset only
-        val_loader = None
-        if USE_FULL_DATASET and val_files:
-            val_dataset = BrainTumorDataset(val_files, patch_size, patches_per_epoch)
-            val_loader = DataLoader(
-                val_dataset, batch_size=batch_size, shuffle=False, num_workers=NUM_WORKERS,
-                pin_memory=True, prefetch_factor=PREFETCH, persistent_workers=(NUM_WORKERS > 0),
-                worker_init_fn=worker_init_fn, drop_last=False
-            )
-            print(f"Validation loader ready - {len(val_dataset)} patches")
+    print(f"Training loader ready - Workers: {NUM_WORKERS}, Prefetch: {PREFETCH}")
+    print(f"Train: {len(train_dataset)} patches, {len(train_loader)} batches per epoch")
 
-        print(f"Training loader ready - Workers: {NUM_WORKERS}, Prefetch: {PREFETCH}")
-        print(f"Train: {len(train_dataset)} patches, {len(train_loader)} batches per epoch")
+    # Model
+    model = nnUNet2025(in_channels, out_channels, base_filters).to(device)
+    print(f"nnU-Net 2025 ready - {sum(p.numel() for p in model.parameters()):,} parameters")
 
-        # Model
-        model = nnUNet2025(in_channels, out_channels, base_filters).to(device)
-        print(f"nnU-Net 2025 ready - {sum(p.numel() for p in model.parameters()):,} parameters")
+    # Optimizer and scheduler
+    optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+    scaler = GradScaler()
 
-        # Optimizer and scheduler
-        optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
-        scaler = GradScaler()
+    print("Loss function and optimizer ready")
 
-        print("Loss function and optimizer ready")
+    # Training loop
+    train_losses = []
+    val_dice_scores = []
+    best_dice = 0.0
+    best_loss = float('inf')
+    epochs_without_improvement = 0
 
-        # Training loop initialization
-        train_losses = []
-        val_dice_scores = []
-        best_dice = 0.0
-        best_loss = float('inf')
-        epochs_without_improvement = 0
+    # Early stopping parameters (only for full dataset)
+    if USE_FULL_DATASET:
+        max_hours = 17.0
+        patience_epochs = 50
+        patience_hours = 4.0
+        print(f"Early stopping enabled - Max: {max_hours}h, Patience: {patience_epochs} epochs or {patience_hours}h")
 
-        # Early stopping parameters (only for full dataset)
-        if USE_FULL_DATASET:
-            max_hours = 17.0
-            patience_epochs = 50
-            patience_hours = 4.0
-            print(
-                f"Early stopping enabled - Max: {max_hours}h, Patience: {patience_epochs} epochs or {patience_hours}h")
+    # Check for existing checkpoints
+    start_epoch = 0
+    checkpoint_files = list(checkpoint_dir.glob('checkpoint_latest.pth'))
+    if checkpoint_files:
+        checkpoint = torch.load(checkpoint_files[0], map_location=device)
 
-        # Check for existing checkpoints
-        start_epoch = 0
-        checkpoint_files = list(checkpoint_dir.glob('checkpoint_latest.pth'))
-        if checkpoint_files:
-            checkpoint = torch.load(checkpoint_files[0], map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        train_losses = checkpoint.get('train_losses', [])
+        val_dice_scores = checkpoint.get('val_dice_scores', [])
+        best_dice = checkpoint.get('best_dice', 0.0)
+        best_loss = checkpoint.get('best_loss', float('inf'))
+        epochs_without_improvement = checkpoint.get('epochs_without_improvement', 0)
 
-            model.load_state_dict(checkpoint['model_state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-            start_epoch = checkpoint['epoch'] + 1
-            train_losses = checkpoint.get('train_losses', [])
-            val_dice_scores = checkpoint.get('val_dice_scores', [])
-            best_dice = checkpoint.get('best_dice', 0.0)
-            best_loss = checkpoint.get('best_loss', float('inf'))
-            epochs_without_improvement = checkpoint.get('epochs_without_improvement', 0)
+        # cumulative training hours
+        cumulative_hours = checkpoint.get('cumulative_hours', 0.0)
+        run_start_time = time.time()
 
-            # cumulative training hours
-            cumulative_hours = checkpoint.get('cumulative_hours', 0.0)
-            run_start_time = time.time()
+        # time of last improvement
+        last_improvement_time = checkpoint.get('last_improvement_time', time.time())
 
-            # time of last improvement
-            last_improvement_time = checkpoint.get('last_improvement_time', time.time())
+        print(f"Resumed from checkpoint at epoch {start_epoch}, "
+              f"cumulative hours: {cumulative_hours:.2f}, "
+              f"epochs_without_improvement: {epochs_without_improvement}")
+    else:
+        cumulative_hours = 0.0
+        run_start_time = time.time()
+        last_improvement_time = time.time()
 
-            print(f"Resumed from checkpoint at epoch {start_epoch}, "
-                  f"cumulative hours: {cumulative_hours:.2f}, "
-                  f"epochs_without_improvement: {epochs_without_improvement}")
-        else:
-            cumulative_hours = 0.0
-            run_start_time = time.time()
-            last_improvement_time = time.time()
+    for epoch in range(start_epoch, epochs):
+        model.train()
+        epoch_loss = 0
 
-        for epoch in range(start_epoch, epochs):
-            model.train()
-            epoch_loss = 0
+        # Training step
+        steps = max(1, patches_per_epoch // batch_size)
 
-            # Training step
-            steps = max(1, patches_per_epoch // batch_size)
+        for step, (imgs, lbls) in enumerate(train_loader):
+            if step >= steps:
+                break
 
-            for step, (imgs, lbls) in enumerate(train_loader):
-                if step >= steps:
-                    break
+            imgs = imgs.to(device, non_blocking=True)
+            lbls = lbls.to(device, non_blocking=True)
 
-                imgs = imgs.to(device, non_blocking=True)
-                lbls = lbls.to(device, non_blocking=True)
+            optimizer.zero_grad()
 
-                optimizer.zero_grad()
+            with autocast(enabled=amp_enabled, dtype=amp_dtype):
+                outputs = model(imgs)
+                total_loss = deep_supervision_loss(outputs, lbls, class_weights, ce_weights,
+                                                   dice_weight, ce_weight, out_channels)
 
-                with autocast(enabled=amp_enabled, dtype=amp_dtype):
-                    outputs = model(imgs)
-                    total_loss = deep_supervision_loss(outputs, lbls, class_weights, ce_weights,
-                                                       dice_weight, ce_weight, out_channels)
+            scaler.scale(total_loss).backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            scaler.step(optimizer)
+            scaler.update()
 
-                scaler.scale(total_loss).backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                scaler.step(optimizer)
-                scaler.update()
+            epoch_loss += total_loss.item()
 
-                epoch_loss += total_loss.item()
+        scheduler.step()
+        avg_loss = epoch_loss / steps
+        train_losses.append(avg_loss)
 
-            scheduler.step()
-            avg_loss = epoch_loss / steps
-            train_losses.append(avg_loss)
+        # Validation step (full dataset only)
+        val_dice = 0.0
+        if USE_FULL_DATASET and val_loader:
+            val_dice = calculate_wt_dice(model, val_loader, device, amp_enabled, amp_dtype)
+            val_dice_scores.append(val_dice)
 
-            # Validation step (full dataset only)
-            val_dice = 0.0
-            if USE_FULL_DATASET and val_loader:
-                val_dice = calculate_wt_dice(model, val_loader, device, amp_enabled, amp_dtype)
-                val_dice_scores.append(val_dice)
+            # Save best model based on validation WT Dice
+            if val_dice > best_dice:
+                best_dice = val_dice
+                epochs_without_improvement = 0
+                last_improvement_time = time.time()   # reset patience timer
 
-                # Save best model based on validation WT Dice
-                if val_dice > best_dice:
-                    best_dice = val_dice
-                    epochs_without_improvement = 0
-                    last_improvement_time = time.time()  # reset patience timer
+                # Save for deployment
+                torch.save(model.state_dict(), model_dir / "best_model.pth")
 
-                    # Save for deployment
-                    torch.save(model.state_dict(), model_dir / "best_model.pth")
-
-                    # Save for resume
-                    elapsed_this_run = (time.time() - run_start_time) / 3600
-                    torch.save({
-                        'model_state_dict': model.state_dict(),
-                        'epoch': epoch,
-                        'val_dice': val_dice,
-                        'train_loss': avg_loss,
-                        'epochs_without_improvement': epochs_without_improvement,
-                        'cumulative_hours': cumulative_hours + elapsed_this_run,
-                        'last_improvement_time': last_improvement_time
-                    }, model_dir / "best_checkpoint.pth")
-
-                    print(f"✅ New best model saved at epoch {epoch + 1}: Val WT Dice = {val_dice:.4f}")
-                else:
-                    epochs_without_improvement += 1
-            else:
-                # Test mode - save based on loss
-                if avg_loss < best_loss:
-                    best_loss = avg_loss
-                    last_improvement_time = time.time()  # reset patience timer
-
-                    # Save for deployment
-                    torch.save(model.state_dict(), model_dir / "best_model.pth")
-
-                    # Save for resume
-                    elapsed_this_run = (time.time() - run_start_time) / 3600
-                    torch.save({
-                        'model_state_dict': model.state_dict(),
-                        'epoch': epoch,
-                        'loss': avg_loss,
-                        'epochs_without_improvement': epochs_without_improvement,
-                        'cumulative_hours': cumulative_hours + elapsed_this_run,
-                        'last_improvement_time': last_improvement_time
-                    }, model_dir / "best_checkpoint.pth")
-
-                    print(f"✅ New best model saved at epoch {epoch + 1}: Loss = {avg_loss:.4f}")
-
-            # Rolling checkpoint
-            if (epoch + 1) % save_every == 0:
+                # Save for resume
                 elapsed_this_run = (time.time() - run_start_time) / 3600
                 torch.save({
                     'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'scheduler_state_dict': scheduler.state_dict(),
                     'epoch': epoch,
+                    'val_dice': val_dice,
                     'train_loss': avg_loss,
-                    'val_dice': val_dice if USE_FULL_DATASET else 0.0,
-                    'train_losses': train_losses,
-                    'val_dice_scores': val_dice_scores,
-                    'best_dice': best_dice,
-                    'best_loss': best_loss,
                     'epochs_without_improvement': epochs_without_improvement,
                     'cumulative_hours': cumulative_hours + elapsed_this_run,
                     'last_improvement_time': last_improvement_time
-                }, checkpoint_dir / 'checkpoint_latest.pth')
+                }, model_dir / "best_checkpoint.pth")
 
-                if not USE_FULL_DATASET:
-                    print(f"📝 Overwriting rolling checkpoint (checkpoint_latest.pth) at epoch {epoch + 1}")
+                print(f"✅ New best model saved at epoch {epoch + 1}: Val WT Dice = {val_dice:.4f}")
+            else:
+                epochs_without_improvement += 1
+        else:
+            # Test mode - save based on loss
+            if avg_loss < best_loss:
+                best_loss = avg_loss
+                last_improvement_time = time.time()   # reset patience timer
 
-            # Progress logging
-            if epoch % 25 == 0:
-                elapsed_hours_total = cumulative_hours + ((time.time() - run_start_time) / 3600)
-                hours_since_improvement = (time.time() - last_improvement_time) / 3600
-                current_lr = optimizer.param_groups[0]['lr']
-                if USE_FULL_DATASET and val_loader:
-                    print(f"Epoch {epoch + 1:4d}/{epochs} | Loss: {avg_loss:.4f} | "
-                          f"Val WT Dice: {val_dice:.4f} | Best: {best_dice:.4f} | "
-                          f"LR: {current_lr:.6f} | Time total: {elapsed_hours_total:.1f}h | "
-                          f"Since improvement: {hours_since_improvement:.1f}h")
-                else:
-                    print(f"Epoch {epoch + 1:4d}/{epochs} | Loss: {avg_loss:.4f} | "
-                          f"Best: {best_loss:.4f} | LR: {current_lr:.6f} | "
-                          f"Time total: {elapsed_hours_total:.1f}h | "
-                          f"Since improvement: {hours_since_improvement:.1f}h")
+                # Save for deployment
+                torch.save(model.state_dict(), model_dir / "best_model.pth")
 
-            # Early stopping logic (full dataset only)
-            if USE_FULL_DATASET:
-                elapsed_hours_total = cumulative_hours + ((time.time() - run_start_time) / 3600)
-                hours_since_improvement = (time.time() - last_improvement_time) / 3600
+                # Save for resume
+                elapsed_this_run = (time.time() - run_start_time) / 3600
+                torch.save({
+                    'model_state_dict': model.state_dict(),
+                    'epoch': epoch,
+                    'loss': avg_loss,
+                    'epochs_without_improvement': epochs_without_improvement,
+                    'cumulative_hours': cumulative_hours + elapsed_this_run,
+                    'last_improvement_time': last_improvement_time
+                }, model_dir / "best_checkpoint.pth")
 
-                # Check stopping conditions
-                time_patience_exceeded = hours_since_improvement >= patience_hours and epochs_without_improvement > 0
-                epoch_patience_exceeded = epochs_without_improvement >= patience_epochs
-                max_time_reached = elapsed_hours_total >= max_hours
+                print(f"✅ New best model saved at epoch {epoch + 1}: Loss = {avg_loss:.4f}")
 
-                if time_patience_exceeded or epoch_patience_exceeded or max_time_reached:
-                    reason = "time patience" if time_patience_exceeded else \
-                        "epoch patience" if epoch_patience_exceeded else "max time"
-                    print(f"\nEarly stopping triggered ({reason})")
-                    print(f"Final: Best WT Dice = {best_dice:.4f}, "
-                          f"Training time total = {elapsed_hours_total:.1f}h, "
-                          f"Hours since improvement = {hours_since_improvement:.1f}h")
-                    break
+        # Rolling checkpoint
+        if (epoch + 1) % save_every == 0:
+            elapsed_this_run = (time.time() - run_start_time) / 3600
+            torch.save({
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'epoch': epoch,
+                'train_loss': avg_loss,
+                'val_dice': val_dice if USE_FULL_DATASET else 0.0,
+                'train_losses': train_losses,
+                'val_dice_scores': val_dice_scores,
+                'best_dice': best_dice,
+                'best_loss': best_loss,
+                'epochs_without_improvement': epochs_without_improvement,
+                'cumulative_hours': cumulative_hours + elapsed_this_run,
+                'last_improvement_time': last_improvement_time
+            }, checkpoint_dir / 'checkpoint_latest.pth')
+
+            if not USE_FULL_DATASET:
+                print(f"📝 Overwriting rolling checkpoint (checkpoint_latest.pth) at epoch {epoch + 1}")
+
+        # Progress logging
+        if epoch % 25 == 0:
+            elapsed_hours_total = cumulative_hours + ((time.time() - run_start_time) / 3600)
+            hours_since_improvement = (time.time() - last_improvement_time) / 3600
+            current_lr = optimizer.param_groups[0]['lr']
+            if USE_FULL_DATASET and val_loader:
+                print(f"Epoch {epoch + 1:4d}/{epochs} | Loss: {avg_loss:.4f} | "
+                      f"Val WT Dice: {val_dice:.4f} | Best: {best_dice:.4f} | "
+                      f"LR: {current_lr:.6f} | Time total: {elapsed_hours_total:.1f}h | "
+                      f"Since improvement: {hours_since_improvement:.1f}h")
+            else:
+                print(f"Epoch {epoch + 1:4d}/{epochs} | Loss: {avg_loss:.4f} | "
+                      f"Best: {best_loss:.4f} | LR: {current_lr:.6f} | "
+                      f"Time total: {elapsed_hours_total:.1f}h | "
+                      f"Since improvement: {hours_since_improvement:.1f}h")
+
+        # Early stopping logic (full dataset only)
+        if USE_FULL_DATASET:
+            elapsed_hours_total = cumulative_hours + ((time.time() - run_start_time) / 3600)
+            hours_since_improvement = (time.time() - last_improvement_time) / 3600
+
+            # Check stopping conditions
+            time_patience_exceeded = hours_since_improvement >= patience_hours and epochs_without_improvement > 0
+            epoch_patience_exceeded = epochs_without_improvement >= patience_epochs
+            max_time_reached = elapsed_hours_total >= max_hours
+
+            if time_patience_exceeded or epoch_patience_exceeded or max_time_reached:
+                reason = "time patience" if time_patience_exceeded else \
+                         "epoch patience" if epoch_patience_exceeded else "max time"
+                print(f"\nEarly stopping triggered ({reason})")
+                print(f"Final: Best WT Dice = {best_dice:.4f}, "
+                      f"Training time total = {elapsed_hours_total:.1f}h, "
+                      f"Hours since improvement = {hours_since_improvement:.1f}h")
+                break
+
+    # Calculate final training time
+    final_time = cumulative_hours + ((time.time() - run_start_time) / 3600)
+
+    # Save deployment artifacts to model_dir
+    torch.save(model.state_dict(), model_dir / 'last_model.pth')
+
+    # Save final metrics and configuration
+    final_report = {
+        'best_val_dice': float(best_dice) if USE_FULL_DATASET else 0.0,
+        'best_loss': float(best_loss),
+        'training_time_hours': float(final_time),
+        'total_epochs': int(len(train_losses)),
+        'target_achieved': bool(best_dice >= 0.9) if USE_FULL_DATASET else False,
+        'config': {
+            'patch_size': tuple(patch_size),
+            'batch_size': int(batch_size),
+            'use_full_dataset': bool(USE_FULL_DATASET),
+            'architecture': 'nnUNet2025_Professional_Validated'
+        }
+    }
+
+    with open(model_dir / 'final_metrics.json', 'w') as f:
+        json.dump(final_report, f, indent=2)
+
+    # Save dataset split for evaluation
+    if USE_FULL_DATASET:
+        with open(model_dir / 'dataset_split.json', 'w') as f:
+            json.dump({
+                'train': [str(p) for p in train_files],
+                'val': [str(p) for p in val_files],
+                'test': [str(p) for p in test_files]
+            }, f, indent=2)
+
+    # Final results summary
+    print(f"\nnnU-Net 2025 Training Complete!")
+    if USE_FULL_DATASET:
+        print(f"Best Validation WT Dice: {best_dice:.4f}")
+        print(f"Target achieved: {'YES' if best_dice >= 0.9 else 'NO'} (≥90%)")
+        print(f"Dataset split: Train({len(train_files)}), Val({len(val_files)}), Test({len(test_files)})")
+        print(f"Early stopping: {'Applied' if len(train_losses) < epochs else 'Not triggered'}")
+    else:
+        print(f"Test mode completed - Best loss: {best_loss:.4f}")
+
+    print(f"Training time: {final_time:.1f} hours")
+    print(f"Models saved: {model_dir}")
+    print(f"Ready for evaluation")
 
 
-if __name__ == "__main__":
-    main()
+    if __name__ == "__main__":
+        main()
