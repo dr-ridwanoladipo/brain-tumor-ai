@@ -515,5 +515,105 @@ def calculate_wt_dice(model, val_loader, device, amp_enabled, amp_dtype):
             run_start_time = time.time()
             last_improvement_time = time.time()
 
-    if __name__ == "__main__":
-        main()
+        for epoch in range(start_epoch, epochs):
+            model.train()
+            epoch_loss = 0
+
+            # Training step
+            steps = max(1, patches_per_epoch // batch_size)
+
+            for step, (imgs, lbls) in enumerate(train_loader):
+                if step >= steps:
+                    break
+
+                imgs = imgs.to(device, non_blocking=True)
+                lbls = lbls.to(device, non_blocking=True)
+
+                optimizer.zero_grad()
+
+                with autocast(enabled=amp_enabled, dtype=amp_dtype):
+                    outputs = model(imgs)
+                    total_loss = deep_supervision_loss(outputs, lbls, class_weights, ce_weights,
+                                                       dice_weight, ce_weight, out_channels)
+
+                scaler.scale(total_loss).backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                scaler.step(optimizer)
+                scaler.update()
+
+                epoch_loss += total_loss.item()
+
+            scheduler.step()
+            avg_loss = epoch_loss / steps
+            train_losses.append(avg_loss)
+
+            # Validation step (full dataset only)
+            val_dice = 0.0
+            if USE_FULL_DATASET and val_loader:
+                val_dice = calculate_wt_dice(model, val_loader, device, amp_enabled, amp_dtype)
+                val_dice_scores.append(val_dice)
+
+                # Save best model based on validation WT Dice
+                if val_dice > best_dice:
+                    best_dice = val_dice
+                    epochs_without_improvement = 0
+                    last_improvement_time = time.time()  # reset patience timer
+
+                    # Save for deployment
+                    torch.save(model.state_dict(), model_dir / "best_model.pth")
+
+                    # Save for resume
+                    elapsed_this_run = (time.time() - run_start_time) / 3600
+                    torch.save({
+                        'model_state_dict': model.state_dict(),
+                        'epoch': epoch,
+                        'val_dice': val_dice,
+                        'train_loss': avg_loss,
+                        'epochs_without_improvement': epochs_without_improvement,
+                        'cumulative_hours': cumulative_hours + elapsed_this_run,
+                        'last_improvement_time': last_improvement_time
+                    }, model_dir / "best_checkpoint.pth")
+
+                    print(f"✅ New best model saved at epoch {epoch + 1}: Val WT Dice = {val_dice:.4f}")
+                else:
+                    epochs_without_improvement += 1
+            else:
+                # Test mode - save based on loss
+                if avg_loss < best_loss:
+                    best_loss = avg_loss
+                    last_improvement_time = time.time()  # reset patience timer
+
+                    # Save for deployment
+                    torch.save(model.state_dict(), model_dir / "best_model.pth")
+
+                    # Save for resume
+                    elapsed_this_run = (time.time() - run_start_time) / 3600
+                    torch.save({
+                        'model_state_dict': model.state_dict(),
+                        'epoch': epoch,
+                        'loss': avg_loss,
+                        'epochs_without_improvement': epochs_without_improvement,
+                        'cumulative_hours': cumulative_hours + elapsed_this_run,
+                        'last_improvement_time': last_improvement_time
+                    }, model_dir / "best_checkpoint.pth")
+
+                    print(f"✅ New best model saved at epoch {epoch + 1}: Loss = {avg_loss:.4f}")
+
+            # Progress logging placeholder
+            if epoch % 25 == 0:
+                elapsed_hours_total = cumulative_hours + ((time.time() - run_start_time) / 3600)
+                hours_since_improvement = (time.time() - last_improvement_time) / 3600
+                current_lr = optimizer.param_groups[0]['lr']
+                if USE_FULL_DATASET and val_loader:
+                    print(f"Epoch {epoch + 1:4d}/{epochs} | Loss: {avg_loss:.4f} | "
+                          f"Val WT Dice: {val_dice:.4f} | Best: {best_dice:.4f} | "
+                          f"LR: {current_lr:.6f} | Time total: {elapsed_hours_total:.1f}h | "
+                          f"Since improvement: {hours_since_improvement:.1f}h")
+                else:
+                    print(f"Epoch {epoch + 1:4d}/{epochs} | Loss: {avg_loss:.4f} | "
+                          f"Best: {best_loss:.4f} | LR: {current_lr:.6f} | "
+                          f"Time total: {elapsed_hours_total:.1f}h | "
+                          f"Since improvement: {hours_since_improvement:.1f}h")
+
+        if __name__ == "__main__":
+            main()
