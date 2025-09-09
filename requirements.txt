@@ -2,3 +2,5 @@ torch
 onnx
 onnxruntime
 numpy
+streamlit
+plotly
