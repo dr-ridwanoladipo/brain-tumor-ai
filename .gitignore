@@ -1,3 +1,5 @@
 .idea
 .venv
 /utility/
+/brain-tumor-eval/
+/brain-tumor-data/
