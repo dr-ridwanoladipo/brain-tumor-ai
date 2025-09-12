@@ -224,3 +224,44 @@ def load_npz_case(case_file):
     except FileNotFoundError:
         st.error(f"Case file not found: {base_path / case_file}")
         return None
+
+
+def display_footer():
+    """Display professional footer with responsive layout"""
+    st.markdown("""
+    <style>
+    .footer-links {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+    }
+    .footer-links a {
+        color: white;
+        margin: 5px 0;
+        text-decoration: none;
+    }
+    @media (max-width: 768px) {
+        .footer-links {
+            flex-direction: column;
+            align-items: center;
+        }
+    }
+    </style>
+    <div class="medical-footer">
+        <h4>🔗 Project Links</h4>
+        <div class="footer-links">
+            <a href="https://github.com/dr-ridwanoladipo/brain-tumor-ai">💻 GitHub Repository</a>
+            <a href="https://www.kaggle.com/code/ridwanoladipoai/nnunet-brain-tumor-preprocessing">📊 Preprocessing Notebook</a>
+            <a href="https://www.kaggle.com/code/ridwanoladipoai/nnunet-brain-tumor-training">🚀 Training Notebook</a>
+            <a href="https://www.kaggle.com/code/ridwanoladipoai/nnunet-brain-tumor-evaluation">📈 Evaluation Notebook</a>
+        </div>
+        <br>
+        <p>© 2025 Ridwan Oladipo, MD | Medical AI Specialist</p>
+        <p><strong>🏥 Advanced Healthcare AI Solutions</strong></p>
+        <p style="font-size: 0.9rem; opacity: 0.8;">
+            ⚠️ This AI tool is for research demonstration only and not approved for clinical diagnosis.
+            All medical decisions should be made in consultation with qualified healthcare providers.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)

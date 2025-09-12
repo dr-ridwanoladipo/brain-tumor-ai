@@ -97,5 +97,41 @@ def main():
         st.markdown(f"**Demo Cases**: {len(manifest)} selected patients")
         st.markdown(f"**Total Evaluated**: {len(results_df)} volumes")
 
+    # Main tabs
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "🧠 Tumor Segmentation",
+        "📈 Performance Metrics",
+        "🏥 Clinical Reports",
+        "🧪 Robustness Testing"
+    ])
+
+    # TAB 1: Tumor Segmentation
+    with tab1:
+        st.markdown("## 🧠 AI-Powered Tumor Segmentation")
+        st.markdown("Select a patient case below to analyze their brain MRI with our AI model.")
+        st.info("👆 Patient selection interface will be implemented here")
+
+    # TAB 2: Performance Metrics
+    with tab2:
+        st.markdown("## 📈 Model Performance Metrics")
+        st.markdown("Comprehensive evaluation results across all test cases")
+        st.info("📊 Performance visualizations will be displayed here")
+
+    # TAB 3: Clinical Reports
+    with tab3:
+        st.markdown("## 🏥 Clinical Report Generator")
+        st.markdown("AI-generated clinical reports for automated tumor analysis")
+        st.info("📋 Clinical reports interface will be implemented here")
+
+    # TAB 4: Robustness Testing
+    with tab4:
+        st.markdown("## 🧪 Robustness Testing Results")
+        st.markdown("Model stability analysis under various imaging conditions")
+        st.info("🔬 Robustness testing results will be displayed here")
+
+    # Footer
+    st.markdown("---")
+    display_footer()
+
 if __name__ == "__main__":
     main()
