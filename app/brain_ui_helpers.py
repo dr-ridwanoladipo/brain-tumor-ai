@@ -211,6 +211,21 @@ def load_demo_data():
         return None, None, None, None, None
 
 
+def load_npz_case(case_file):
+    """Load a specific NPZ case file"""
+    try:
+        base_path = Path("evaluation_results")
+        with np.load(base_path / case_file) as data:
+            return {
+                'image': data['image'],
+                'label': data['label'],
+                'prediction': data['prediction']
+            }
+    except FileNotFoundError:
+        st.error(f"Case file not found: {base_path / case_file}")
+        return None
+
+
 def create_mri_viewer(image_data, slice_idx=None, modality_idx=0):
     """Create MRI slice viewer"""
     if slice_idx is None:
@@ -517,21 +532,6 @@ def display_clinical_report(report):
     """, unsafe_allow_html=True)
 
 
-def load_npz_case(case_file):
-    """Load a specific NPZ case file"""
-    try:
-        base_path = Path("evaluation_results")
-        with np.load(base_path / case_file) as data:
-            return {
-                'image': data['image'],
-                'label': data['label'],
-                'prediction': data['prediction']
-            }
-    except FileNotFoundError:
-        st.error(f"Case file not found: {base_path / case_file}")
-        return None
-
-
 def simulate_prediction_progress():
     """Simulate AI prediction progress"""
     progress_text = st.empty()
@@ -565,6 +565,25 @@ def get_patient_summary(case_data, manifest_entry):
         'wt_volume': manifest_entry['WT_vol_true_cm3'],
         'description': f"WT Dice: {manifest_entry['WT_dice']:.3f} | Volume: {manifest_entry['WT_vol_true_cm3']:.1f} cm³"
     }
+
+
+def display_model_info(model_card):
+    """Display model information"""
+    st.markdown(f"""
+    <div class="metric-card">
+        <h4>🧠 {model_card['model_name']}</h4>
+        <p><strong>Version:</strong> {model_card['version']}</p>
+        <p><strong>Architecture:</strong> {model_card['architecture']}</p>
+
+        <h5>📊 Performance Metrics</h5>
+        <ul>
+            <li>Whole Tumor Dice: {model_card['performance_metrics']['whole_tumor_dice']}</li>
+            <li>Tumor Core Dice: {model_card['performance_metrics']['tumor_core_dice']}</li>
+            <li>Enhancing Tumor Dice: {model_card['performance_metrics']['enhancing_tumor_dice']}</li>
+            <li>Inference Time: {model_card['performance_metrics']['average_inference_time']}</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 def display_footer():

@@ -294,12 +294,12 @@ def main():
                             st.plotly_chart(overlay_fig, use_container_width=True)
 
                             st.markdown("""
-                                **Legend:**
-                                - 🟢 **Green**: Edema (Ground Truth)
-                                - 🟡 **Yellow**: Non-enhancing Core (Ground Truth)
-                                - 🔴 **Red**: Enhancing Tumor (Ground Truth)
-                                - 🔵 **Cyan Dashed Line**: AI Predicted Whole Tumor (WT)
-                                """)
+                            **Legend:**
+                            - 🟢 **Green**: Edema (Ground Truth)
+                            - 🟡 **Yellow**: Non-enhancing Core (Ground Truth)
+                            - 🔴 **Red**: Enhancing Tumor (Ground Truth)
+                            - 🔵 **Cyan Dashed Line**: AI Predicted Whole Tumor (WT)
+                            """)
 
                             # Performance metrics for this case
                             st.markdown("#### 📈 Case Performance")
@@ -331,210 +331,190 @@ def main():
         else:
             st.info("👆 Please select a patient case above to begin MRI analysis.")
 
+    # TAB 2: Performance Metrics
+    with tab2:
+        st.markdown("## 📈 Model Performance Metrics")
+        st.markdown("Comprehensive evaluation results across all test cases")
 
-        # TAB 2: Performance Metrics
-        with tab2:
-            st.markdown("## 📈 Model Performance Metrics")
-            st.markdown("Comprehensive evaluation results across all test cases")
+        # Summary statistics
+        col1, col2, col3 = st.columns(3)
 
-            # Summary statistics
-            col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown("""
+            <div class="metric-card">
+                <div class="metric-value">86.1%</div>
+                <div class="metric-label">Whole Tumor Dice</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-            with col1:
-                st.markdown("""
-                <div class="metric-card">
-                    <div class="metric-value">86.1%</div>
-                    <div class="metric-label">Whole Tumor Dice</div>
-                </div>
-                """, unsafe_allow_html=True)
+        with col2:
+            st.markdown("""
+            <div class="metric-card">
+                <div class="metric-value">77.8%</div>
+                <div class="metric-label">Tumor Core Dice</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-            with col2:
-                st.markdown("""
-                <div class="metric-card">
-                    <div class="metric-value">77.8%</div>
-                    <div class="metric-label">Tumor Core Dice</div>
-                </div>
-                """, unsafe_allow_html=True)
+        with col3:
+            st.markdown("""
+            <div class="metric-card">
+                <div class="metric-value">64.6%</div>
+                <div class="metric-label">Enhancing Tumor Dice</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-            with col3:
-                st.markdown("""
-                <div class="metric-card">
-                    <div class="metric-value">64.6%</div>
-                    <div class="metric-label">Enhancing Tumor Dice</div>
-                </div>
-                """, unsafe_allow_html=True)
+        st.markdown("---")
 
-            st.markdown("---")
+        # Performance charts
+        col1, col2 = st.columns(2)
 
-            # Performance charts
-            col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("### 📊 Dice Score Distribution")
+            dice_fig, _ = create_performance_charts(results_df)
+            st.plotly_chart(dice_fig, use_container_width=True)
 
-            with col1:
-                st.markdown("### 📊 Dice Score Distribution")
-                dice_fig, _ = create_performance_charts(results_df)
-                st.plotly_chart(dice_fig, use_container_width=True)
+        with col2:
+            st.markdown("### 📏 Hausdorff Distance Distribution")
+            _, hd_fig = create_performance_charts(results_df)
+            st.plotly_chart(hd_fig, use_container_width=True)
 
-            with col2:
-                st.markdown("### 📏 Hausdorff Distance Distribution")
-                _, hd_fig = create_performance_charts(results_df)
-                st.plotly_chart(hd_fig, use_container_width=True)
+        # Volume correlation
+        st.markdown("### 🎯 Volume Prediction Accuracy")
+        vol_fig = create_volume_correlation(results_df)
+        st.plotly_chart(vol_fig, use_container_width=True)
 
-            # Volume correlation
-            st.markdown("### 🎯 Volume Prediction Accuracy")
-            vol_fig = create_volume_correlation(results_df)
-            st.plotly_chart(vol_fig, use_container_width=True)
+        # Detailed results table
+        st.markdown("### 📋 Detailed Results by Case")
 
-            # Detailed results table
-            st.markdown("### 📋 Detailed Results by Case")
+        # Filter for demo cases only
+        demo_case_ids = [case['case_id'] for case in manifest]
+        demo_results = results_df[results_df['case_id'].isin(demo_case_ids)].copy()
 
-            # Filter for demo cases only
+        # Format for display
+        display_cols = ['case_id', 'WT_dice', 'TC_dice', 'ET_dice',
+                       'WT_vol_true', 'WT_vol_pred', 'inference_time']
+
+        demo_results_display = demo_results[display_cols].round(3)
+        demo_results_display.columns = ['Case ID', 'WT Dice', 'TC Dice', 'ET Dice',
+                                       'True Volume (cm³)', 'Pred Volume (cm³)', 'Time (s)']
+
+        st.dataframe(demo_results_display, use_container_width=True)
+
+    # TAB 3: Clinical Reports
+    with tab3:
+        st.markdown("## 🏥 Clinical Report Generator")
+        st.markdown("AI-generated clinical reports for automated tumor analysis")
+
+        if sample_reports:
+            # Filter reports for demo cases
             demo_case_ids = [case['case_id'] for case in manifest]
-            demo_results = results_df[results_df['case_id'].isin(demo_case_ids)].copy()
+            demo_reports = [r for r in sample_reports if r['patient_id'] in demo_case_ids]
 
-            # Format for display
-            display_cols = ['case_id', 'WT_dice', 'TC_dice', 'ET_dice',
-                            'WT_vol_true', 'WT_vol_pred', 'inference_time']
+            if demo_reports:
+                st.markdown("### 📋 Select Patient Report")
 
-            demo_results_display = demo_results[display_cols].round(3)
-            demo_results_display.columns = ['Case ID', 'WT Dice', 'TC Dice', 'ET Dice',
-                                            'True Volume (cm³)', 'Pred Volume (cm³)', 'Time (s)']
+                report_case = st.selectbox(
+                    "Choose patient for clinical report",
+                    demo_reports,
+                    format_func=lambda x: f"Patient {x['patient_id']} - {x['clinical_urgency']}"
+                )
 
-            st.dataframe(demo_results_display, use_container_width=True)
+                if report_case:
+                    # Display selected report
+                    display_clinical_report(report_case)
 
-            # Volume analysis for both modes
-            if st.session_state.get('show_prediction', False) and 'selected_patient' in st.session_state:
-                selected_patient = st.session_state.selected_patient
-                case_row = results_df[results_df['case_id'] == selected_patient['case_id']].iloc[0]
-                wt_vol = case_row['WT_vol_pred']
-                tc_vol = case_row['TC_vol_pred']
-                et_vol = case_row['ET_vol_pred']
+                    # Report summary metrics
+                    st.markdown("### 📊 Report Summary")
 
-                st.markdown("#### 📊 Volume Analysis")
-                col1, col2, col3 = st.columns(3)
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric(
+                            "AI Confidence",
+                            report_case['ai_confidence']
+                        )
+                    with col2:
+                        st.metric(
+                            "Clinical Urgency",
+                            report_case['clinical_urgency']
+                        )
+                    with col3:
+                        st.metric(
+                            "Total Volume",
+                            f"{report_case['tumor_volumes']['whole_tumor_cm3']} cm³"
+                        )
+            else:
+                st.warning("No clinical reports available for demo cases.")
+        else:
+            st.warning("Clinical reports not available. Please ensure sample_clinical_reports.json is loaded.")
+
+    # TAB 4: Robustness Testing
+    with tab4:
+        st.markdown("## 🧪 Robustness Testing Results")
+        st.markdown("Model stability analysis under various imaging conditions")
+
+        if robustness_data and robustness_data.get('noise'):
+            # Create robustness charts
+            noise_fig, intensity_fig = create_robustness_charts(robustness_data)
+
+            if noise_fig and intensity_fig:
+                col1, col2 = st.columns(2)
+
                 with col1:
-                    st.metric("WT Volume", f"{wt_vol:.1f} cm³")
+                    st.markdown("### 🔊 Noise Robustness")
+                    st.plotly_chart(noise_fig, use_container_width=True)
+
+                    st.markdown("""
+                    **Analysis**: Model maintains stable performance across different noise levels,
+                    demonstrating robustness to scanner variations and acquisition artifacts.
+                    """)
+
                 with col2:
-                    st.metric("TC Volume", f"{tc_vol:.1f} cm³")
-                with col3:
-                    st.metric("ET Volume", f"{et_vol:.1f} cm³")
+                    st.markdown("### 🎛️ Intensity Robustness")
+                    st.plotly_chart(intensity_fig, use_container_width=True)
 
-        # TAB 3: Clinical Reports
-        with tab3:
-            st.markdown("## 🏥 Clinical Report Generator")
-            st.markdown("AI-generated clinical reports for automated tumor analysis")
+                    st.markdown("""
+                    **Analysis**: Performance remains consistent across intensity variations,
+                    showing adaptability to different MRI scanner settings and protocols.
+                    """)
 
-            if sample_reports:
-                # Filter reports for demo cases
-                demo_case_ids = [case['case_id'] for case in manifest]
-                demo_reports = [r for r in sample_reports if r['patient_id'] in demo_case_ids]
+                # Summary statistics
+                st.markdown("### 📈 Robustness Summary")
 
-                if demo_reports:
-                    st.markdown("### 📋 Select Patient Report")
-
-                    report_case = st.selectbox(
-                        "Choose patient for clinical report",
-                        demo_reports,
-                        format_func=lambda x: f"Patient {x['patient_id']} - {x['clinical_urgency']}"
-                    )
-
-                    if report_case:
-                        # Display selected report
-                        display_clinical_report(report_case)
-
-                        # Report summary metrics
-                        st.markdown("### 📊 Report Summary")
+                try:
+                    if 'noise' in robustness_data and '0.05' in robustness_data['noise'] and '0.15' in robustness_data['noise']:
+                        # Get baseline and high noise performance
+                        baseline_wt = np.mean([v for v in robustness_data['noise']['0.05']['WT']])
+                        noise_15_wt = np.mean([v for v in robustness_data['noise']['0.15']['WT']])
 
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             st.metric(
-                                "AI Confidence",
-                                report_case['ai_confidence']
+                                "Baseline WT Dice",
+                                f"{baseline_wt:.3f}"
                             )
                         with col2:
                             st.metric(
-                                "Clinical Urgency",
-                                report_case['clinical_urgency']
+                                "High Noise WT Dice",
+                                f"{noise_15_wt:.3f}",
+                                f"{noise_15_wt - baseline_wt:.3f}"
                             )
                         with col3:
-                            st.metric(
-                                "Total Volume",
-                                f"{report_case['tumor_volumes']['whole_tumor_cm3']} cm³"
-                            )
-                else:
-                    st.warning("No clinical reports available for demo cases.")
-            else:
-                st.warning("Clinical reports not available. Please ensure sample_clinical_reports.json is loaded.")
-
-        # TAB 4: Robustness Testing
-        with tab4:
-            st.markdown("## 🧪 Robustness Testing Results")
-            st.markdown("Model stability analysis under various imaging conditions")
-
-            if robustness_data and robustness_data.get('noise'):
-                # Create robustness charts
-                noise_fig, intensity_fig = create_robustness_charts(robustness_data)
-
-                if noise_fig and intensity_fig:
-                    col1, col2 = st.columns(2)
-
-                    with col1:
-                        st.markdown("### 🔊 Noise Robustness")
-                        st.plotly_chart(noise_fig, use_container_width=True)
-
-                        st.markdown("""
-                        **Analysis**: Model maintains stable performance across different noise levels,
-                        demonstrating robustness to scanner variations and acquisition artifacts.
-                        """)
-
-                    with col2:
-                        st.markdown("### 🎛️ Intensity Robustness")
-                        st.plotly_chart(intensity_fig, use_container_width=True)
-
-                        st.markdown("""
-                        **Analysis**: Performance remains consistent across intensity variations,
-                        showing adaptability to different MRI scanner settings and protocols.
-                        """)
-
-                    # Summary statistics
-                    st.markdown("### 📈 Robustness Summary")
-
-                    try:
-                        if 'noise' in robustness_data and '0.05' in robustness_data['noise'] and '0.15' in \
-                                robustness_data['noise']:
-                            # Get baseline and high noise performance
-                            baseline_wt = np.mean([v for v in robustness_data['noise']['0.05']['WT']])
-                            noise_15_wt = np.mean([v for v in robustness_data['noise']['0.15']['WT']])
-
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
+                            if baseline_wt > 0:
+                                robustness_score = (noise_15_wt / baseline_wt) * 100
                                 st.metric(
-                                    "Baseline WT Dice",
-                                    f"{baseline_wt:.3f}"
+                                    "Robustness Score",
+                                    f"{robustness_score:.1f}%"
                                 )
-                            with col2:
-                                st.metric(
-                                    "High Noise WT Dice",
-                                    f"{noise_15_wt:.3f}",
-                                    f"{noise_15_wt - baseline_wt:.3f}"
-                                )
-                            with col3:
-                                if baseline_wt > 0:
-                                    robustness_score = (noise_15_wt / baseline_wt) * 100
-                                    st.metric(
-                                        "Robustness Score",
-                                        f"{robustness_score:.1f}%"
-                                    )
-                    except (KeyError, ValueError, TypeError):
-                        st.info("Robustness summary statistics could not be calculated from available data.")
-                else:
-                    st.warning("Robustness charts could not be generated from available data.")
+                except (KeyError, ValueError, TypeError):
+                    st.info("Robustness summary statistics could not be calculated from available data.")
             else:
-                st.warning("Robustness testing data not available. Please ensure robustness_analysis.json is loaded.")
+                st.warning("Robustness charts could not be generated from available data.")
+        else:
+            st.warning("Robustness testing data not available. Please ensure robustness_analysis.json is loaded.")
 
     # Footer
     st.markdown("---")
     display_footer()
-
 
 if __name__ == "__main__":
     main()
