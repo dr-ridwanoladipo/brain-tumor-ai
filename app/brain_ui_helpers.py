@@ -178,3 +178,49 @@ def load_custom_css():
     }
     </style>
     """, unsafe_allow_html=True)
+
+
+def load_demo_data():
+    """Load all demo data files"""
+    try:
+        # Base path to evaluation results
+        base_path = Path('evaluation_results')
+
+        # Load manifest
+        with open(base_path / 'demo_manifest.json', 'r') as f:
+            manifest = json.load(f)
+
+        # Load evaluation results
+        results_df = pd.read_csv(base_path / 'detailed_evaluation_results.csv')
+
+        # Load sample reports
+        with open(base_path / 'sample_clinical_reports.json', 'r') as f:
+            sample_reports = json.load(f)
+
+        # Load robustness analysis
+        with open(base_path / 'robustness_analysis.json', 'r') as f:
+            robustness_data = json.load(f)
+
+        # Load model card
+        with open(base_path / 'model_card.json', 'r') as f:
+            model_card = json.load(f)
+
+        return manifest, results_df, sample_reports, robustness_data, model_card
+    except FileNotFoundError as e:
+        st.error(f"Data file not found: {e}")
+        return None, None, None, None, None
+
+
+def load_npz_case(case_file):
+    """Load a specific NPZ case file"""
+    try:
+        base_path = Path("evaluation_results")
+        with np.load(base_path / case_file) as data:
+            return {
+                'image': data['image'],
+                'label': data['label'],
+                'prediction': data['prediction']
+            }
+    except FileNotFoundError:
+        st.error(f"Case file not found: {base_path / case_file}")
+        return None

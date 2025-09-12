@@ -46,5 +46,56 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
+    # Load data
+    with st.spinner("Loading AI model and demo data..."):
+        manifest, results_df, sample_reports, robustness_data, model_card = load_demo_data()
+
+    if manifest is None:
+        st.error("Failed to load demo data. Please ensure all data files are present.")
+        return
+
+    # Status indicator
+    st.markdown("""
+    <div class="success-indicator">
+        ✅ AI Model Ready | 86.1% WT Dice Performance | Clinical Precision
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Sidebar with model info
+    with st.sidebar:
+        st.markdown("### 🎯 Model Performance")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("""
+            <div class="metric-card">
+                <div class="metric-value">86%</div>
+                <div class="metric-label">WT Dice Score</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col2:
+            st.markdown("""
+            <div class="metric-card">
+                <div class="metric-value">78%</div>
+                <div class="metric-label">TC Dice Score</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("### ℹ️ About This AI")
+        st.markdown("""
+        - **Architecture**: nnU-Net 2025 (5-level U-Net)
+        - **Training**: 484 brain MRI volumes  
+        - **Modalities**: FLAIR, T1w, T1Gd, T2w
+        - **Validation**: 49 test cases
+        - **Performance**: Clinical-grade accuracy
+        """)
+
+        st.markdown("---")
+        st.markdown("### 📊 Dataset Info")
+        st.markdown(f"**Demo Cases**: {len(manifest)} selected patients")
+        st.markdown(f"**Total Evaluated**: {len(results_df)} volumes")
+
 if __name__ == "__main__":
     main()
