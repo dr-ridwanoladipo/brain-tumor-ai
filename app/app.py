@@ -418,11 +418,52 @@ def main():
                 with col3:
                     st.metric("ET Volume", f"{et_vol:.1f} cm³")
 
-    # TAB 3: Clinical Reports (unchanged)
-    with tab3:
-        st.markdown("## 🏥 Clinical Report Generator")
-        st.markdown("AI-generated clinical reports for automated tumor analysis")
-        st.info("📋 Clinical reports interface will be implemented here")
+        # TAB 3: Clinical Reports
+        with tab3:
+            st.markdown("## 🏥 Clinical Report Generator")
+            st.markdown("AI-generated clinical reports for automated tumor analysis")
+
+            if sample_reports:
+                # Filter reports for demo cases
+                demo_case_ids = [case['case_id'] for case in manifest]
+                demo_reports = [r for r in sample_reports if r['patient_id'] in demo_case_ids]
+
+                if demo_reports:
+                    st.markdown("### 📋 Select Patient Report")
+
+                    report_case = st.selectbox(
+                        "Choose patient for clinical report",
+                        demo_reports,
+                        format_func=lambda x: f"Patient {x['patient_id']} - {x['clinical_urgency']}"
+                    )
+
+                    if report_case:
+                        # Display selected report
+                        display_clinical_report(report_case)
+
+                        # Report summary metrics
+                        st.markdown("### 📊 Report Summary")
+
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric(
+                                "AI Confidence",
+                                report_case['ai_confidence']
+                            )
+                        with col2:
+                            st.metric(
+                                "Clinical Urgency",
+                                report_case['clinical_urgency']
+                            )
+                        with col3:
+                            st.metric(
+                                "Total Volume",
+                                f"{report_case['tumor_volumes']['whole_tumor_cm3']} cm³"
+                            )
+                else:
+                    st.warning("No clinical reports available for demo cases.")
+            else:
+                st.warning("Clinical reports not available. Please ensure sample_clinical_reports.json is loaded.")
 
     # TAB 4: Robustness Testing (unchanged)
     with tab4:

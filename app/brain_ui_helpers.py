@@ -389,6 +389,55 @@ def create_volume_correlation(results_df):
     return fig
 
 
+def display_clinical_report(report):
+    """Display clinical report in styled format"""
+    # Header section
+    st.markdown(f"""
+    <div class="clinical-report">
+        <h4>🏥 Clinical Analysis Report</h4>
+        <p><strong>Patient ID:</strong> {report['patient_id']}</p>
+        <p><strong>Analysis Date:</strong> {report['analysis_date']}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Volume section
+    st.markdown(f"""
+    <div class="clinical-report">
+        <h5>📊 Tumor Volume Analysis</h5>
+        <ul>
+            <li>Whole Tumor: {report['tumor_volumes']['whole_tumor_cm3']} cm³</li>
+            <li>Tumor Core: {report['tumor_volumes']['tumor_core_cm3']} cm³</li>
+            <li>Enhancing Tumor: {report['tumor_volumes']['enhancing_tumor_cm3']} cm³</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Assessment section
+    st.markdown(f"""
+    <div class="clinical-report">
+        <h5>🎯 AI Assessment</h5>
+        <p><strong>Confidence Level:</strong> {report['ai_confidence']}</p>
+        <p><strong>Clinical Urgency:</strong> {report['clinical_urgency']}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Recommendation section
+    st.markdown(f"""
+    <div class="clinical-report">
+        <h5>💡 Recommendation</h5>
+        <p>{report['recommendation']}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Technical notes section
+    st.markdown(f"""
+    <div class="clinical-report">
+        <h5>🔬 Technical Notes</h5>
+        <p>{report['technical_notes']}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 def load_npz_case(case_file):
     """Load a specific NPZ case file"""
     try:
