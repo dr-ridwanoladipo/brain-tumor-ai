@@ -109,21 +109,88 @@ def main():
     with tab1:
         st.markdown("## 🧠 AI-Powered Tumor Segmentation")
         st.markdown("Select a patient case below to analyze their brain MRI with our AI model.")
-        st.info("👆 Patient selection interface will be implemented here")
 
-    # TAB 2: Performance Metrics
+        # Patient selection
+        st.markdown("### 👥 Patient Selection")
+
+        cols = st.columns(3)
+        selected_patient = None
+
+        for i, case in enumerate(manifest):
+            with cols[i]:
+                case_summary = get_patient_summary(None, case)
+
+                if st.button(
+                        f"**Patient {case['case_id']}**\n\n{case_summary['description']}",
+                        key=f"patient_{i}",
+                        use_container_width=True
+                ):
+                    selected_patient = case
+                    st.session_state.selected_patient = case
+                    # Reset prediction state when switching patients
+                    st.session_state.show_prediction = False
+
+        # Use session state to maintain selection
+        if 'selected_patient' in st.session_state:
+            selected_patient = st.session_state.selected_patient
+
+        if selected_patient:
+            st.markdown(f"### 📋 Patient {selected_patient['case_id']} - MRI Analysis")
+
+            # Load patient data
+            case_data = load_npz_case(selected_patient['npz_file'])
+
+            if case_data:
+                # Auto-play toggle
+                auto_play = st.checkbox("▶️ Auto-play slices", key="auto_play")
+
+                # Reset prediction state when toggling auto-play mode
+                if 'previous_auto_play' not in st.session_state:
+                    st.session_state.previous_auto_play = auto_play
+                elif st.session_state.previous_auto_play != auto_play:
+                    st.session_state.show_prediction = False
+                    st.session_state.previous_auto_play = auto_play
+
+                # MRI viewer structure placeholder
+                col1, col2 = st.columns([3, 2])
+
+                with col1:
+                    st.markdown('<div class="mri-viewer">', unsafe_allow_html=True)
+                    st.markdown("#### 🔍 MRI Volume Viewer")
+                    st.info("MRI visualization will be implemented based on mode selection")
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+                with col2:
+                    st.markdown("#### 🎯 AI Analysis")
+
+                    # Patient info
+                    st.markdown(f"**Patient ID**: {selected_patient['case_id']}")
+                    st.markdown(f"**WT Dice Score**: {selected_patient['WT_dice']:.3f}")
+                    st.markdown(f"**True WT Volume**: {selected_patient['WT_vol_true_cm3']:.1f} cm³")
+                    st.markdown(f"**Predicted Volume**: {selected_patient['WT_vol_pred_cm3']:.1f} cm³")
+
+                    st.markdown("---")
+
+                    # Prediction button placeholder
+                    if st.button("🔮 **Run AI Prediction**", key="predict_btn", use_container_width=True):
+                        st.success("✅ AI Prediction functionality will be implemented")
+
+        else:
+            st.info("👆 Please select a patient case above to begin MRI analysis.")
+
+    # TAB 2: Performance Metrics (unchanged)
     with tab2:
         st.markdown("## 📈 Model Performance Metrics")
         st.markdown("Comprehensive evaluation results across all test cases")
         st.info("📊 Performance visualizations will be displayed here")
 
-    # TAB 3: Clinical Reports
+    # TAB 3: Clinical Reports (unchanged)
     with tab3:
         st.markdown("## 🏥 Clinical Report Generator")
         st.markdown("AI-generated clinical reports for automated tumor analysis")
         st.info("📋 Clinical reports interface will be implemented here")
 
-    # TAB 4: Robustness Testing
+    # TAB 4: Robustness Testing (unchanged)
     with tab4:
         st.markdown("## 🧪 Robustness Testing Results")
         st.markdown("Model stability analysis under various imaging conditions")
@@ -132,6 +199,7 @@ def main():
     # Footer
     st.markdown("---")
     display_footer()
+
 
 if __name__ == "__main__":
     main()

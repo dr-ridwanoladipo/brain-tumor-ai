@@ -226,6 +226,16 @@ def load_npz_case(case_file):
         return None
 
 
+def get_patient_summary(case_data, manifest_entry):
+    """Get patient summary for selection"""
+    return {
+        'case_id': manifest_entry['case_id'],
+        'wt_dice': manifest_entry['WT_dice'],
+        'wt_volume': manifest_entry['WT_vol_true_cm3'],
+        'description': f"WT Dice: {manifest_entry['WT_dice']:.3f} | Volume: {manifest_entry['WT_vol_true_cm3']:.1f} cm³"
+    }
+
+
 def display_footer():
     """Display professional footer with responsive layout"""
     st.markdown("""
