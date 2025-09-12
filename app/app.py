@@ -330,11 +330,93 @@ def main():
 
         else:
             st.info("👆 Please select a patient case above to begin MRI analysis.")
-    # TAB 2: Performance Metrics (unchanged)
-    with tab2:
-        st.markdown("## 📈 Model Performance Metrics")
-        st.markdown("Comprehensive evaluation results across all test cases")
-        st.info("📊 Performance visualizations will be displayed here")
+
+
+        # TAB 2: Performance Metrics
+        with tab2:
+            st.markdown("## 📈 Model Performance Metrics")
+            st.markdown("Comprehensive evaluation results across all test cases")
+
+            # Summary statistics
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.markdown("""
+                <div class="metric-card">
+                    <div class="metric-value">86.1%</div>
+                    <div class="metric-label">Whole Tumor Dice</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col2:
+                st.markdown("""
+                <div class="metric-card">
+                    <div class="metric-value">77.8%</div>
+                    <div class="metric-label">Tumor Core Dice</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col3:
+                st.markdown("""
+                <div class="metric-card">
+                    <div class="metric-value">64.6%</div>
+                    <div class="metric-label">Enhancing Tumor Dice</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("---")
+
+            # Performance charts
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("### 📊 Dice Score Distribution")
+                dice_fig, _ = create_performance_charts(results_df)
+                st.plotly_chart(dice_fig, use_container_width=True)
+
+            with col2:
+                st.markdown("### 📏 Hausdorff Distance Distribution")
+                _, hd_fig = create_performance_charts(results_df)
+                st.plotly_chart(hd_fig, use_container_width=True)
+
+            # Volume correlation
+            st.markdown("### 🎯 Volume Prediction Accuracy")
+            vol_fig = create_volume_correlation(results_df)
+            st.plotly_chart(vol_fig, use_container_width=True)
+
+            # Detailed results table
+            st.markdown("### 📋 Detailed Results by Case")
+
+            # Filter for demo cases only
+            demo_case_ids = [case['case_id'] for case in manifest]
+            demo_results = results_df[results_df['case_id'].isin(demo_case_ids)].copy()
+
+            # Format for display
+            display_cols = ['case_id', 'WT_dice', 'TC_dice', 'ET_dice',
+                            'WT_vol_true', 'WT_vol_pred', 'inference_time']
+
+            demo_results_display = demo_results[display_cols].round(3)
+            demo_results_display.columns = ['Case ID', 'WT Dice', 'TC Dice', 'ET Dice',
+                                            'True Volume (cm³)', 'Pred Volume (cm³)', 'Time (s)']
+
+            st.dataframe(demo_results_display, use_container_width=True)
+
+            # Volume analysis for both modes
+            if st.session_state.get('show_prediction', False) and 'selected_patient' in st.session_state:
+                selected_patient = st.session_state.selected_patient
+                case_row = results_df[results_df['case_id'] == selected_patient['case_id']].iloc[0]
+                wt_vol = case_row['WT_vol_pred']
+                tc_vol = case_row['TC_vol_pred']
+                et_vol = case_row['ET_vol_pred']
+
+                st.markdown("#### 📊 Volume Analysis")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("WT Volume", f"{wt_vol:.1f} cm³")
+                with col2:
+                    st.metric("TC Volume", f"{tc_vol:.1f} cm³")
+                with col3:
+                    st.metric("ET Volume", f"{et_vol:.1f} cm³")
 
     # TAB 3: Clinical Reports (unchanged)
     with tab3:

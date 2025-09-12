@@ -307,6 +307,88 @@ def create_segmentation_overlay(image_data, label_data, pred_data, slice_idx, mo
     return fig
 
 
+def create_performance_charts(results_df):
+    """Create performance visualization charts"""
+    # Dice scores by region
+    regions = ['WT', 'TC', 'ET']
+    colors = ['#3b82f6', '#ef4444', '#10b981']
+
+    fig_dice = go.Figure()
+
+    for i, region in enumerate(regions):
+        dice_scores = results_df[f'{region}_dice'].values
+        fig_dice.add_trace(go.Box(
+            y=dice_scores,
+            name=region,
+            marker_color=colors[i],
+            boxmean=True
+        ))
+
+    fig_dice.update_layout(
+        title="Dice Scores by Tumor Region",
+        yaxis_title="Dice Coefficient",
+        showlegend=False,
+        height=400
+    )
+
+    # Hausdorff distances
+    fig_hd = go.Figure()
+
+    for i, region in enumerate(regions):
+        hd_scores = results_df[f'{region}_hausdorff'].replace([np.inf, -np.inf], np.nan).dropna().values
+        fig_hd.add_trace(go.Box(
+            y=hd_scores,
+            name=region,
+            marker_color=colors[i],
+            boxmean=True
+        ))
+
+    fig_hd.update_layout(
+        title="Hausdorff Distances by Tumor Region",
+        yaxis_title="Distance (mm)",
+        showlegend=False,
+        height=400
+    )
+
+    return fig_dice, fig_hd
+
+
+def create_volume_correlation(results_df):
+    """Create volume correlation plot"""
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x=results_df['WT_vol_true'],
+        y=results_df['WT_vol_pred'],
+        mode='markers',
+        marker=dict(
+            size=8,
+            color='#3b82f6',
+            opacity=0.6
+        ),
+        name='WT Volume'
+    ))
+
+    # Perfect correlation line
+    max_vol = max(results_df['WT_vol_true'].max(), results_df['WT_vol_pred'].max())
+    fig.add_trace(go.Scatter(
+        x=[0, max_vol],
+        y=[0, max_vol],
+        mode='lines',
+        line=dict(color='red', dash='dash'),
+        name='Perfect Correlation'
+    ))
+
+    fig.update_layout(
+        title="Volume Correlation - Whole Tumor",
+        xaxis_title="True Volume (cm³)",
+        yaxis_title="Predicted Volume (cm³)",
+        height=400
+    )
+
+    return fig
+
+
 def load_npz_case(case_file):
     """Load a specific NPZ case file"""
     try:
