@@ -465,11 +465,71 @@ def main():
             else:
                 st.warning("Clinical reports not available. Please ensure sample_clinical_reports.json is loaded.")
 
-    # TAB 4: Robustness Testing (unchanged)
-    with tab4:
-        st.markdown("## 🧪 Robustness Testing Results")
-        st.markdown("Model stability analysis under various imaging conditions")
-        st.info("🔬 Robustness testing results will be displayed here")
+        # TAB 4: Robustness Testing
+        with tab4:
+            st.markdown("## 🧪 Robustness Testing Results")
+            st.markdown("Model stability analysis under various imaging conditions")
+
+            if robustness_data and robustness_data.get('noise'):
+                # Create robustness charts
+                noise_fig, intensity_fig = create_robustness_charts(robustness_data)
+
+                if noise_fig and intensity_fig:
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.markdown("### 🔊 Noise Robustness")
+                        st.plotly_chart(noise_fig, use_container_width=True)
+
+                        st.markdown("""
+                        **Analysis**: Model maintains stable performance across different noise levels,
+                        demonstrating robustness to scanner variations and acquisition artifacts.
+                        """)
+
+                    with col2:
+                        st.markdown("### 🎛️ Intensity Robustness")
+                        st.plotly_chart(intensity_fig, use_container_width=True)
+
+                        st.markdown("""
+                        **Analysis**: Performance remains consistent across intensity variations,
+                        showing adaptability to different MRI scanner settings and protocols.
+                        """)
+
+                    # Summary statistics
+                    st.markdown("### 📈 Robustness Summary")
+
+                    try:
+                        if 'noise' in robustness_data and '0.05' in robustness_data['noise'] and '0.15' in \
+                                robustness_data['noise']:
+                            # Get baseline and high noise performance
+                            baseline_wt = np.mean([v for v in robustness_data['noise']['0.05']['WT']])
+                            noise_15_wt = np.mean([v for v in robustness_data['noise']['0.15']['WT']])
+
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric(
+                                    "Baseline WT Dice",
+                                    f"{baseline_wt:.3f}"
+                                )
+                            with col2:
+                                st.metric(
+                                    "High Noise WT Dice",
+                                    f"{noise_15_wt:.3f}",
+                                    f"{noise_15_wt - baseline_wt:.3f}"
+                                )
+                            with col3:
+                                if baseline_wt > 0:
+                                    robustness_score = (noise_15_wt / baseline_wt) * 100
+                                    st.metric(
+                                        "Robustness Score",
+                                        f"{robustness_score:.1f}%"
+                                    )
+                    except (KeyError, ValueError, TypeError):
+                        st.info("Robustness summary statistics could not be calculated from available data.")
+                else:
+                    st.warning("Robustness charts could not be generated from available data.")
+            else:
+                st.warning("Robustness testing data not available. Please ensure robustness_analysis.json is loaded.")
 
     # Footer
     st.markdown("---")

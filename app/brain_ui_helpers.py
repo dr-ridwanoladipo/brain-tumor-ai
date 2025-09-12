@@ -389,6 +389,85 @@ def create_volume_correlation(results_df):
     return fig
 
 
+def create_robustness_charts(robustness_data):
+    """Create robustness analysis charts"""
+    if not robustness_data.get('noise'):
+        return None, None
+
+    # Noise robustness
+    fig_noise = go.Figure()
+
+    regions = ['WT', 'TC', 'ET']
+    colors = ['#3b82f6', '#ef4444', '#10b981']
+
+    noise_levels = sorted([float(k) for k in robustness_data['noise'].keys()])
+
+    for i, region in enumerate(regions):
+        dice_means = []
+        dice_stds = []
+        for level in noise_levels:
+            level_str = str(level)
+            if level_str in robustness_data['noise']:
+                values = robustness_data['noise'][level_str][region]
+                dice_means.append(np.mean(values))
+                dice_stds.append(np.std(values))
+            else:
+                dice_means.append(0)
+                dice_stds.append(0)
+
+        fig_noise.add_trace(go.Scatter(
+            x=noise_levels,
+            y=dice_means,
+            error_y=dict(type='data', array=dice_stds),
+            mode='lines+markers',
+            name=region,
+            line=dict(color=colors[i])
+        ))
+
+    fig_noise.update_layout(
+        title="Robustness to Gaussian Noise",
+        xaxis_title="Noise Level (σ)",
+        yaxis_title="Dice Score",
+        height=400
+    )
+
+    # Intensity shift robustness
+    fig_intensity = go.Figure()
+
+    intensity_levels = sorted([float(k) for k in robustness_data['intensity'].keys()])
+
+    for i, region in enumerate(regions):
+        dice_means = []
+        dice_stds = []
+        for level in intensity_levels:
+            level_str = str(level)
+            if level_str in robustness_data['intensity']:
+                values = robustness_data['intensity'][level_str][region]
+                dice_means.append(np.mean(values))
+                dice_stds.append(np.std(values))
+            else:
+                dice_means.append(0)
+                dice_stds.append(0)
+
+        fig_intensity.add_trace(go.Scatter(
+            x=intensity_levels,
+            y=dice_means,
+            error_y=dict(type='data', array=dice_stds),
+            mode='lines+markers',
+            name=region,
+            line=dict(color=colors[i])
+        ))
+
+    fig_intensity.update_layout(
+        title="Robustness to Intensity Shifts",
+        xaxis_title="Intensity Shift Factor",
+        yaxis_title="Dice Score",
+        height=400
+    )
+
+    return fig_noise, fig_intensity
+
+
 def display_clinical_report(report):
     """Display clinical report in styled format"""
     # Header section
