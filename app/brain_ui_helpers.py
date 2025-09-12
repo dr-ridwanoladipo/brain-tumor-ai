@@ -211,6 +211,102 @@ def load_demo_data():
         return None, None, None, None, None
 
 
+def create_mri_viewer(image_data, slice_idx=None, modality_idx=0):
+    """Create MRI slice viewer"""
+    if slice_idx is None:
+        slice_idx = image_data.shape[2] // 2
+
+    # Get slice
+    slice_data = image_data[:, :, slice_idx, modality_idx]
+
+    # Create figure
+    fig = go.Figure()
+
+    fig.add_trace(go.Heatmap(
+        z=slice_data,
+        colorscale='gray',
+        showscale=False
+    ))
+
+    fig.update_layout(
+        title=f"MRI Slice {slice_idx + 1} - {'FLAIR' if modality_idx == 0 else 'T1w' if modality_idx == 1 else 'T1Gd' if modality_idx == 2 else 'T2w'}",
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+        width=400,
+        height=400,
+        margin=dict(l=0, r=0, t=50, b=0)
+    )
+
+    return fig
+
+
+def create_segmentation_overlay(image_data, label_data, pred_data, slice_idx, modality_idx=0):
+    """
+    BraTS-standard visualization:
+      - Ground Truth: semi-transparent fills (Edema=Green, Non-enhancing=Yellow, Enhancing=Red)
+      - AI Prediction: Cyan dashed outline for Whole Tumor
+    """
+    # Extract slice
+    base_slice = image_data[:, :, slice_idx, modality_idx]
+    gt_slice = label_data[:, :, slice_idx]
+
+    # Collapse AI prediction to WT
+    pred_wt_slice = (pred_data[:, :, slice_idx] > 0).astype(np.uint8)
+
+    fig = go.Figure()
+
+    # Base MRI
+    fig.add_trace(go.Heatmap(
+        z=base_slice,
+        colorscale="gray",
+        showscale=False,
+        name="MRI"
+    ))
+
+    # Ground Truth regions
+    gt_colors = {
+        1: ("rgba(0,255,0,0.65)", "Edema (GT)"),
+        2: ("rgba(255,255,0,0.65)", "Non-enhancing (GT)"),
+        3: ("rgba(255,0,0,0.65)", "Enhancing (GT)")
+    }
+
+    for label_val, (fill_color, name) in gt_colors.items():
+        mask = (gt_slice == label_val).astype(int)
+        if np.any(mask):
+            fig.add_trace(go.Contour(
+                z=mask,
+                showscale=False,
+                contours=dict(start=0.5, end=1.5, size=1, coloring="fill"),
+                line=dict(width=0),
+                name=name,
+                opacity=0.65,
+                colorscale=[[0, "rgba(0,0,0,0)"], [1, fill_color]]
+            ))
+
+    # AI Prediction outline
+    if np.any(pred_wt_slice > 0):
+        fig.add_trace(go.Contour(
+            z=pred_wt_slice,
+            showscale=False,
+            contours=dict(start=0.5, end=1.5, size=1, coloring="lines"),
+            line=dict(color="cyan", width=4, dash="dash"),
+            name="AI Prediction (WT)"
+        ))
+
+    # Layout
+    fig.update_layout(
+        title=f"AI Segmentation vs Ground Truth - Slice {slice_idx + 1}",
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+        width=600,
+        height=600,
+        margin=dict(l=0, r=0, t=50, b=0),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5)
+    )
+
+    return fig
+
+
 def load_npz_case(case_file):
     """Load a specific NPZ case file"""
     try:
@@ -224,6 +320,31 @@ def load_npz_case(case_file):
     except FileNotFoundError:
         st.error(f"Case file not found: {base_path / case_file}")
         return None
+
+
+def simulate_prediction_progress():
+    """Simulate AI prediction progress"""
+    progress_text = st.empty()
+    progress_bar = st.progress(0)
+
+    stages = [
+        "Loading MRI volume...",
+        "Preprocessing image data...",
+        "Running AI inference...",
+        "Post-processing results...",
+        "Generating segmentation masks...",
+        "Finalizing prediction..."
+    ]
+
+    for i, stage in enumerate(stages):
+        progress_text.text(stage)
+        progress_bar.progress((i + 1) / len(stages))
+        time.sleep(0.3)
+
+    progress_text.text("✅ Prediction complete!")
+    time.sleep(0.5)
+    progress_bar.empty()
+    progress_text.empty()
 
 
 def get_patient_summary(case_data, manifest_entry):
