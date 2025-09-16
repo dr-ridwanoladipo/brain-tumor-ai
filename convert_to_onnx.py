@@ -8,6 +8,8 @@ Targeting WT Dice ≥ 90% and BraTS Avg ≥ 80%
 
 import torch
 import torch.nn as nn
+import onnx
+import onnxruntime as ort
 
 # Model Architecture (inference-optimized)
 def conv_block(in_f, out_f):
@@ -115,10 +117,6 @@ torch.onnx.export(
     output_names=['main_out'],
     dynamic_axes={'input': {0: 'batch'}, 'main_out': {0: 'batch'}}
 )
-
-# Validation
-import onnx
-import onnxruntime as ort
 
 # Load and validate ONNX model
 onnx_model = onnx.load(onnx_path)
