@@ -82,6 +82,24 @@ class BrainDataService:
         """Generate/retrieve clinical report (returns precomputed result)."""
         return self.get_clinical_report(case_id)
 
+    def get_metrics_summary(self) -> Dict[str, Any]:
+        """Get model performance summary."""
+        if not self.model_card:
+            return {}
+        return {
+            'model_name': self.model_card.get('model_name', 'nnU-Net 2025'),
+            'version': self.model_card.get('version', '1.0'),
+            'architecture': self.model_card.get('architecture', '5-level U-Net'),
+            'performance_metrics': self.model_card.get('performance_metrics', {}),
+            'test_volumes': len(self.manifest) if self.manifest else 0
+        }
+
+    def get_robustness_summary(self) -> Dict[str, Any]:
+        """Get robustness analysis results."""
+        if not self.robustness_data:
+            return {'noise': {}, 'intensity': {}}
+        return self.robustness_data
+
 # ── Global service instance ───────────────────────────────
 data_service = BrainDataService()
 

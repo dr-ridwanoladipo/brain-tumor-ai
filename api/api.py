@@ -89,6 +89,26 @@ class ClinicalReport(BaseModel):
     recommendation: str
     technical_notes: str
 
+class ModelPerformance(BaseModel):
+    whole_tumor_dice: str
+    tumor_core_dice: str
+    enhancing_tumor_dice: str
+    average_inference_time: str
+    training_time: str
+
+class MetricsSummary(BaseModel):
+    model_name: str
+    version: str
+    architecture: str
+    performance_metrics: ModelPerformance
+    test_volumes: int
+    timestamp: str
+
+class RobustnessSummary(BaseModel):
+    noise_robustness: Dict[str, Dict[str, List[float]]]
+    intensity_robustness: Dict[str, Dict[str, List[float]]]
+    timestamp: str
+
 # ── Startup events ─────────────────────────────
 @app.on_event("startup")
 async def startup_event():
@@ -181,3 +201,33 @@ async def generate_clinical_report(request: Request, case_id: str):
     except Exception as e:
         logger.error(f"Error generating clinical report: {e}")
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate clinical report")
+
+@app.get("/metrics-summary", response_model=MetricsSummary)
+@limiter.limit("10/minute")
+async def get_metrics_summary(request: Request):
+    if not data_loaded:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="Data service not loaded")
+    try:
+        logger.info("Metrics summary requested")
+        metrics = data_service.get_metrics_summary()
+        return MetricsSummary(**metrics, timestamp=current_time_iso())
+    except Exception as e:
+        logger.error(f"Error getting metrics summary: {e}")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve metrics summary")
+
+@app.get("/robustness-summary", response_model=RobustnessSummary)
+@limiter.limit("10/minute")
+async def get_robustness_summary(request: Request):
+    if not data_loaded:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="Data service not loaded")
+    try:
+        logger.info("Robustness summary requested")
+        robustness = data_service.get_robustness_summary()
+        return RobustnessSummary(
+            noise_robustness=robustness.get('noise', {}),
+            intensity_robustness=robustness.get('intensity', {}),
+            timestamp=current_time_iso()
+        )
+    except Exception as e:
+        logger.error(f"Error getting robustness summary: {e}")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve robustness summary")
