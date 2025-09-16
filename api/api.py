@@ -13,6 +13,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from pydantic import BaseModel
+from .model import initialize_data_service, data_service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -30,3 +32,38 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 
 def current_time_iso():
     return datetime.now().isoformat()
+
+# ── State ─────────────────────────────
+data_loaded = False
+startup_time = None
+
+# ── Models ─────────────────────────────
+class HealthResponse(BaseModel):
+    status: str
+    data_loaded: bool
+    startup_time: str
+    timestamp: str
+    version: str
+
+# ── Startup events ─────────────────────────────
+@app.on_event("startup")
+async def startup_event():
+    global data_loaded, startup_time
+    startup_time = current_time_iso()
+    logger.info("Starting Brain Tumor API...")
+    try:
+        data_loaded = initialize_data_service()
+        logger.info("Data service ready" if data_loaded else "Data service failed to load")
+    except Exception as e:
+        logger.error(f"Startup error: {e}")
+
+# ── Routes ─────────────────────────────
+@app.get("/health", response_model=HealthResponse)
+async def health_check():
+    return HealthResponse(
+        status="ok" if data_loaded else "error",
+        data_loaded=data_loaded,
+        version="1.0.0",
+        startup_time=startup_time,
+        timestamp=current_time_iso(),
+    )

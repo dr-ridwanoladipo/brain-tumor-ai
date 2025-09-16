@@ -28,3 +28,34 @@ class BrainDataService:
         self.robustness_data = None
         self.model_card = None
         self.data_path = Path("evaluation_results")
+
+    def load_data(self) -> bool:
+        """Load all precomputed data files."""
+        try:
+            logger.info("Loading brain tumor analysis data...")
+
+            with open(self.data_path / 'demo_manifest.json', 'r') as f:
+                self.manifest = json.load(f)
+
+            self.results_df = pd.read_csv(self.data_path / 'detailed_evaluation_results.csv')
+
+            with open(self.data_path / 'sample_clinical_reports.json', 'r') as f:
+                self.sample_reports = json.load(f)
+
+            with open(self.data_path / 'robustness_analysis.json', 'r') as f:
+                self.robustness_data = json.load(f)
+
+            with open(self.data_path / 'model_card.json', 'r') as f:
+                self.model_card = json.load(f)
+
+            logger.info("All data loaded successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to load data: {str(e)}")
+            return False
+
+# ── Global service instance ───────────────────────────────
+data_service = BrainDataService()
+
+def initialize_data_service() -> bool:
+    return data_service.load_data()
