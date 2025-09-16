@@ -60,6 +60,15 @@ class BrainDataService:
             return []
         return self.manifest
 
+    def get_case_metrics(self, case_id: str) -> Optional[Dict[str, Any]]:
+        """Get detailed metrics for a specific case."""
+        if self.results_df is None:
+            return None
+        case_row = self.results_df[self.results_df['case_id'] == case_id]
+        if case_row.empty:
+            return None
+        return case_row.iloc[0].to_dict()
+
 # ── Global service instance ───────────────────────────────
 data_service = BrainDataService()
 

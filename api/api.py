@@ -55,6 +55,26 @@ class CaseInfo(BaseModel):
     WT_vol_true_cm3: float
     WT_vol_pred_cm3: float
 
+class CaseMetrics(BaseModel):
+    case_id: str
+    test_file: str
+    inference_time: float
+    WT_dice: float
+    TC_dice: float
+    ET_dice: float
+    WT_hausdorff: float
+    TC_hausdorff: float
+    ET_hausdorff: float
+    WT_vol_true: float
+    WT_vol_pred: float
+    TC_vol_true: float
+    TC_vol_pred: float
+    ET_vol_true: float
+    ET_vol_pred: float
+    WT_vol_error: float
+    TC_vol_error: float
+    ET_vol_error: float
+
 # ── Startup events ─────────────────────────────
 @app.on_event("startup")
 async def startup_event():
@@ -90,3 +110,20 @@ async def get_cases(request: Request):
     except Exception as e:
         logger.error(f"Error getting cases: {e}")
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve cases")
+
+@app.get("/case/{case_id}", response_model=CaseMetrics)
+@limiter.limit("10/minute")
+async def get_case_details(request: Request, case_id: str):
+    if not data_loaded:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="Data service not loaded")
+    try:
+        logger.info(f"Case details requested: {case_id}")
+        case_data = data_service.get_case_metrics(case_id)
+        if not case_data:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Case {case_id} not found")
+        return CaseMetrics(**case_data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting case details: {e}")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve case details")
