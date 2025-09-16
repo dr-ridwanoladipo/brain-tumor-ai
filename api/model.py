@@ -100,6 +100,44 @@ class BrainDataService:
             return {'noise': {}, 'intensity': {}}
         return self.robustness_data
 
+    def get_segmentation_info(self, case_id: str) -> Optional[Dict[str, Any]]:
+        """Get segmentation data information for a case."""
+        npz_file = f"inferenced_{case_id}_preprocessed.npz"
+        npz_path = self.data_path / npz_file
+        if not npz_path.exists():
+            return None
+        try:
+            with np.load(npz_path) as data:
+                image_shape = data['image'].shape
+                label_shape = data['label'].shape
+                prediction_shape = data['prediction'].shape
+            return {
+                'case_id': case_id,
+                'image_shape': list(image_shape),
+                'label_shape': list(label_shape),
+                'prediction_shape': list(prediction_shape),
+                'modalities': ['FLAIR', 'T1w', 'T1Gd', 'T2w'],
+                'message': f"NPZ data available for case {case_id}"
+            }
+        except Exception as e:
+            logger.error(f"Error loading segmentation info for {case_id}: {e}")
+            return None
+
+    def get_case_videos(self, case_id: str) -> Optional[Dict[str, str]]:
+        """Get video file paths for a case (if available)."""
+        plain_video = self.data_path / f"{case_id}_cine_plain.mp4"
+        overlay_video = self.data_path / f"{case_id}_cine_overlay.mp4"
+        videos = {}
+        if plain_video.exists():
+            videos['cine_plain'] = f"{case_id}_cine_plain.mp4"
+        if overlay_video.exists():
+            videos['cine_overlay'] = f"{case_id}_cine_overlay.mp4"
+        if not videos:
+            return None
+        videos['case_id'] = case_id
+        videos['message'] = f"Video files available for case {case_id}"
+        return videos
+
 # ── Global service instance ───────────────────────────────
 data_service = BrainDataService()
 
