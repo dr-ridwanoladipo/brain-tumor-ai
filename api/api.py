@@ -75,6 +75,20 @@ class CaseMetrics(BaseModel):
     TC_vol_error: float
     ET_vol_error: float
 
+class TumorVolumes(BaseModel):
+    whole_tumor_cm3: float
+    tumor_core_cm3: float
+    enhancing_tumor_cm3: float
+
+class ClinicalReport(BaseModel):
+    patient_id: str
+    analysis_date: str
+    tumor_volumes: TumorVolumes
+    ai_confidence: str
+    clinical_urgency: str
+    recommendation: str
+    technical_notes: str
+
 # ── Startup events ─────────────────────────────
 @app.on_event("startup")
 async def startup_event():
@@ -127,3 +141,43 @@ async def get_case_details(request: Request, case_id: str):
     except Exception as e:
         logger.error(f"Error getting case details: {e}")
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve case details")
+
+@app.get("/clinical-report/{case_id}", response_model=ClinicalReport)
+@limiter.limit("10/minute")
+async def get_clinical_report(request: Request, case_id: str):
+    if not data_loaded:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="Data service not loaded")
+    try:
+        logger.info(f"Clinical report requested: {case_id}")
+        report = data_service.get_clinical_report(case_id)
+        if not report:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Clinical report for case {case_id} not found")
+        return ClinicalReport(
+            tumor_volumes=TumorVolumes(**report['tumor_volumes']),
+            **{k: v for k, v in report.items() if k != 'tumor_volumes'}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting clinical report: {e}")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve clinical report")
+
+@app.post("/generate-report/{case_id}", response_model=ClinicalReport)
+@limiter.limit("5/minute")
+async def generate_clinical_report(request: Request, case_id: str):
+    if not data_loaded:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="Data service not loaded")
+    try:
+        logger.info(f"Report generation requested: {case_id}")
+        report = data_service.generate_clinical_report(case_id)
+        if not report:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Cannot generate report for case {case_id}")
+        return ClinicalReport(
+            tumor_volumes=TumorVolumes(**report['tumor_volumes']),
+            **{k: v for k, v in report.items() if k != 'tumor_volumes'}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating clinical report: {e}")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate clinical report")

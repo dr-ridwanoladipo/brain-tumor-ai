@@ -69,6 +69,19 @@ class BrainDataService:
             return None
         return case_row.iloc[0].to_dict()
 
+    def get_clinical_report(self, case_id: str) -> Optional[Dict[str, Any]]:
+        """Get clinical report for a specific case."""
+        if not self.sample_reports:
+            return None
+        for report in self.sample_reports:
+            if report.get('patient_id') == case_id:
+                return report
+        return None
+
+    def generate_clinical_report(self, case_id: str) -> Optional[Dict[str, Any]]:
+        """Generate/retrieve clinical report (returns precomputed result)."""
+        return self.get_clinical_report(case_id)
+
 # ── Global service instance ───────────────────────────────
 data_service = BrainDataService()
 
