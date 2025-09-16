@@ -1,55 +1,84 @@
 """
 🧠 Brain Tumor Segmentation API - FastAPI REST API
-Professional API for serving precomputed brain tumor analysis results.
+API for serving precomputed brain tumor analysis results.
 
 Author: Ridwan Oladipo, MD | AI Specialist
 """
 
+# ── Imports ────────────────────────────────────────────────────────────────────
 from datetime import datetime
 import logging
 import time
-import uvicorn
 import traceback
-from typing import Any, Dict, List
-from fastapi import FastAPI, Request, HTTPException, status
+from typing import Any, Dict, List, Optional
+
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from pydantic import BaseModel
 from .model import initialize_data_service, data_service
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+# =========================
+# Logging
+# =========================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%d-%m-%Y | %I:%M%p",
+    handlers=[logging.FileHandler("brain_api.log"), logging.StreamHandler()],
+)
 logger = logging.getLogger(__name__)
 
+# =========================
+# Rate Limiting
+# =========================
 limiter = Limiter(key_func=get_remote_address)
 
+# =========================
+# FastAPI app
+# =========================
 app = FastAPI(
     title="Brain Tumor Segmentation API",
-    description="Professional API for serving precomputed brain tumor analysis results",
-    version="1.0.0"
+    description="API for serving precomputed brain tumor analysis results",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 app.state.limiter = limiter
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    logger.info(f"{request.method} {request.url.path} in {(time.time()-start)*1000:.2f} ms")
+    return response
+
+# =========================
+# State & util
+# =========================
+data_loaded = False
+startup_time = None
 
 def current_time_iso():
     return datetime.now().isoformat()
 
-# ── State ─────────────────────────────
-data_loaded = False
-startup_time = None
-
-# ── Models ─────────────────────────────
-class HealthResponse(BaseModel):
-    status: str
-    data_loaded: bool
-    startup_time: str
-    timestamp: str
-    version: str
-
+# =========================
+# Response Models
+# =========================
 class CaseInfo(BaseModel):
     case_id: str
     npz_file: str
@@ -113,6 +142,13 @@ class RobustnessSummary(BaseModel):
     intensity_robustness: Dict[str, Dict[str, List[float]]]
     timestamp: str
 
+class HealthResponse(BaseModel):
+    status: str
+    data_loaded: bool
+    startup_time: str
+    timestamp: str
+    version: str
+
 class SegmentationData(BaseModel):
     case_id: str
     image_shape: List[int]
@@ -121,7 +157,9 @@ class SegmentationData(BaseModel):
     modalities: List[str]
     message: str
 
-# ── Startup events ─────────────────────────────
+# =========================
+# Startup / shutdown
+# =========================
 @app.on_event("startup")
 async def startup_event():
     global data_loaded, startup_time
@@ -132,8 +170,15 @@ async def startup_event():
         logger.info("Data service ready" if data_loaded else "Data service failed to load")
     except Exception as e:
         logger.error(f"Startup error: {e}")
+        logger.error(traceback.format_exc())
 
-# ── Routes ─────────────────────────────
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Shutting down Brain Tumor API...")
+
+# =========================
+# Routes
+# =========================
 @app.get("/", summary="Brain Tumor Segmentation API Overview", tags=["App Info"])
 async def root():
     return {
@@ -149,7 +194,7 @@ async def root():
         "documentation": "/docs",
     }
 
-@app.get("/health", response_model=HealthResponse, tags=["Health"])
+@app.get("/health", response_model=HealthResponse, summary="Service health check", tags=["Health"])
 async def health_check():
     return HealthResponse(
         status="ok" if data_loaded else "error",
@@ -159,7 +204,7 @@ async def health_check():
         timestamp=current_time_iso(),
     )
 
-@app.get("/cases", response_model=List[CaseInfo], tags=["Cases"])
+@app.get("/cases", response_model=List[CaseInfo], summary="Get all demo cases", tags=["Cases"])
 @limiter.limit("10/minute")
 async def get_cases(request: Request):
     if not data_loaded:
@@ -172,7 +217,7 @@ async def get_cases(request: Request):
         logger.error(f"Error getting cases: {e}")
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve cases")
 
-@app.get("/case/{case_id}", response_model=CaseMetrics, tags=["Cases"])
+@app.get("/case/{case_id}", response_model=CaseMetrics, summary="Get detailed case metrics", tags=["Cases"])
 @limiter.limit("10/minute")
 async def get_case_details(request: Request, case_id: str):
     if not data_loaded:
@@ -189,7 +234,24 @@ async def get_case_details(request: Request, case_id: str):
         logger.error(f"Error getting case details: {e}")
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve case details")
 
-@app.get("/clinical-report/{case_id}", response_model=ClinicalReport, tags=["Clinical"])
+@app.get("/case/{case_id}/segmentation", response_model=SegmentationData, summary="Get segmentation data info", tags=["Cases"])
+@limiter.limit("5/minute")
+async def get_case_segmentation(request: Request, case_id: str):
+    if not data_loaded:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="Data service not loaded")
+    try:
+        logger.info(f"Segmentation data requested: {case_id}")
+        seg_data = data_service.get_segmentation_info(case_id)
+        if not seg_data:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Segmentation data for case {case_id} not found")
+        return SegmentationData(**seg_data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting segmentation data: {e}")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve segmentation data")
+
+@app.get("/clinical-report/{case_id}", response_model=ClinicalReport, summary="Get clinical report", tags=["Clinical"])
 @limiter.limit("10/minute")
 async def get_clinical_report(request: Request, case_id: str):
     if not data_loaded:
@@ -209,7 +271,7 @@ async def get_clinical_report(request: Request, case_id: str):
         logger.error(f"Error getting clinical report: {e}")
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve clinical report")
 
-@app.post("/generate-report/{case_id}", response_model=ClinicalReport, tags=["Clinical"])
+@app.post("/generate-report/{case_id}", response_model=ClinicalReport, summary="Generate clinical report", tags=["Clinical"])
 @limiter.limit("5/minute")
 async def generate_clinical_report(request: Request, case_id: str):
     if not data_loaded:
@@ -229,7 +291,7 @@ async def generate_clinical_report(request: Request, case_id: str):
         logger.error(f"Error generating clinical report: {e}")
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate clinical report")
 
-@app.get("/metrics-summary", response_model=MetricsSummary, tags=["Performance"])
+@app.get("/metrics-summary", response_model=MetricsSummary, summary="Get model performance summary", tags=["Performance"])
 @limiter.limit("10/minute")
 async def get_metrics_summary(request: Request):
     if not data_loaded:
@@ -242,7 +304,7 @@ async def get_metrics_summary(request: Request):
         logger.error(f"Error getting metrics summary: {e}")
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve metrics summary")
 
-@app.get("/robustness-summary", response_model=RobustnessSummary, tags=["Performance"])
+@app.get("/robustness-summary", response_model=RobustnessSummary, summary="Get robustness analysis", tags=["Performance"])
 @limiter.limit("10/minute")
 async def get_robustness_summary(request: Request):
     if not data_loaded:
@@ -259,24 +321,7 @@ async def get_robustness_summary(request: Request):
         logger.error(f"Error getting robustness summary: {e}")
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve robustness summary")
 
-@app.get("/case/{case_id}/segmentation", response_model=SegmentationData, tags=["Cases"])
-@limiter.limit("5/minute")
-async def get_case_segmentation(request: Request, case_id: str):
-    if not data_loaded:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="Data service not loaded")
-    try:
-        logger.info(f"Segmentation data requested: {case_id}")
-        seg_data = data_service.get_segmentation_info(case_id)
-        if not seg_data:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Segmentation data for case {case_id} not found")
-        return SegmentationData(**seg_data)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting segmentation data: {e}")
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve segmentation data")
-
-@app.get("/case/{case_id}/videos", tags=["Media"])
+@app.get("/case/{case_id}/videos", summary="Get video file paths", tags=["Media"])
 @limiter.limit("10/minute")
 async def get_case_videos(request: Request, case_id: str):
     if not data_loaded:
@@ -293,7 +338,9 @@ async def get_case_videos(request: Request, case_id: str):
         logger.error(f"Error getting videos: {e}")
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve video paths")
 
-# ── Exception handlers ─────────────────────────────
+# =========================
+# Exception handlers
+# =========================
 @app.exception_handler(ValueError)
 async def value_error_handler(request, exc):
     logger.error(f"Validation error: {exc}")
@@ -305,6 +352,8 @@ async def general_exception_handler(request, exc):
     logger.error(traceback.format_exc())
     return JSONResponse(status_code=500, content={"detail": "Unexpected error occurred", "time": current_time_iso()})
 
-# ── Uvicorn entry ─────────────────────────────
+# =========================
+# Uvicorn entry
+# =========================
 if __name__ == "__main__":
     uvicorn.run("brain_api:app", host="0.0.0.0", port=8000, reload=True, log_level="info")
