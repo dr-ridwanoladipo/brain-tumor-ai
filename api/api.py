@@ -9,7 +9,8 @@ from datetime import datetime
 import logging
 import time
 import uvicorn
-from fastapi import FastAPI, Request
+from typing import Any, Dict, List
+from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -45,6 +46,15 @@ class HealthResponse(BaseModel):
     timestamp: str
     version: str
 
+class CaseInfo(BaseModel):
+    case_id: str
+    npz_file: str
+    WT_dice: float
+    TC_dice: float
+    ET_dice: float
+    WT_vol_true_cm3: float
+    WT_vol_pred_cm3: float
+
 # ── Startup events ─────────────────────────────
 @app.on_event("startup")
 async def startup_event():
@@ -67,3 +77,16 @@ async def health_check():
         startup_time=startup_time,
         timestamp=current_time_iso(),
     )
+
+@app.get("/cases", response_model=List[CaseInfo])
+@limiter.limit("10/minute")
+async def get_cases(request: Request):
+    if not data_loaded:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="Data service not loaded")
+    try:
+        logger.info("Cases list requested")
+        cases = data_service.get_demo_cases()
+        return [CaseInfo(**case) for case in cases]
+    except Exception as e:
+        logger.error(f"Error getting cases: {e}")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve cases")

@@ -54,6 +54,12 @@ class BrainDataService:
             logger.error(f"Failed to load data: {str(e)}")
             return False
 
+    def get_demo_cases(self) -> List[Dict[str, Any]]:
+        """Return list of all demo cases."""
+        if not self.manifest:
+            return []
+        return self.manifest
+
 # ── Global service instance ───────────────────────────────
 data_service = BrainDataService()
 
