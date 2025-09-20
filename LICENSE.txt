@@ -1,0 +1,11 @@
+Clinical-Grade AI Implementation
+© 2025 Ridwan Oladipo, MD | AI Specialist
+
+This project demonstrates advanced medical AI capabilities built to clinical-grade engineering standards. The live demo is publicly accessible for evaluation and collaboration.
+
+⚠️ Regulatory Notice: This represents pre-clinical research and requires formal validation for clinical deployment.
+
+All rights reserved. Redistribution, modification, or commercial use without prior written consent is prohibited.
+
+For partnerships, enterprise integration, or consulting inquiries:
+📧 dr.ridwan.oladipo@gmail.com
