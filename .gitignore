@@ -3,6 +3,7 @@
 /utility/
 /brain-tumor-eval/
 /brain-tumor-data/
-/evaluation_results/
+/evaluation_results/*
+!/evaluation_results/cine_loop.gif
 /cicd/
 /models/
