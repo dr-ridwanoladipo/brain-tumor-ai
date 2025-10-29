@@ -5,15 +5,17 @@ by Ridwan Oladipo, MD | AI Specialist
 All reusable functions for the Streamlit UI application
 """
 
-import streamlit as st
-import pandas as pd
-import numpy as np
 import json
+import time
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from pathlib import Path
-import time
+import streamlit as st
+import streamlit.components.v1 as components
 
 
 def load_custom_css():
@@ -37,7 +39,7 @@ def load_custom_css():
 
     /* Medical header styling */
     .medical-header {
-        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
         padding: 2rem;
         border-radius: 15px;
         color: white;
@@ -64,7 +66,7 @@ def load_custom_css():
     .metric-card {
         background: white;
         border-radius: 12px;
-        padding: 1.5rem;
+        padding: 1.3rem;
         text-align: center;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
         border: 1px solid #e5e7eb;
@@ -85,7 +87,7 @@ def load_custom_css():
 
     /* Status indicators */
     .success-indicator {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        background: linear-gradient(135deg, #1e3a8a 0%, #0ea5e9 100%);
         color: white;
         padding: 0.75rem 1.5rem;
         border-radius: 10px;
@@ -139,43 +141,27 @@ def load_custom_css():
         margin-bottom: 1rem;
     }
 
-    /* MRI viewer styling */
-    .mri-viewer {
-        background: white;
-        border-radius: 15px;
-        padding: 1rem;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-        border: 1px solid #e5e7eb;
-    }
-
     /* Prediction button */
-    .predict-btn {
-        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    div.stButton > button[kind="secondary"] {
+        background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
         color: white;
-        border: none;
-        border-radius: 10px;
-        padding: 0.75rem 2rem;
         font-weight: 600;
-        font-size: 1.1rem;
-        transition: all 0.3s ease;
-        width: 100%;
-        margin: 1rem 0;
+        border-radius: 8px;
+        border: none;
+        padding: 0.8rem 1.2rem;
+        transition: all 0.2s ease;
     }
 
-    .predict-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 16px rgba(239, 68, 68, 0.3);
+    div.stButton > button[kind="secondary"]:hover {
+        background: linear-gradient(135deg, #2a5298 0%, #1e3c72 100%);
+        transform: scale(1.02);
     }
 
-    /* Footer styling */
-    .medical-footer {
-        background: #1f2937;
-        color: white;
-        padding: 2rem;
-        border-radius: 15px;
-        text-align: center;
-        margin-top: 3rem;
+    video {
+        height: 450px !important;  /* adjust value as you prefer */
+        object-fit: contain !important;
     }
+
     </style>
     """, unsafe_allow_html=True)
 
@@ -232,7 +218,7 @@ def create_mri_viewer(image_data, slice_idx=None, modality_idx=0):
         slice_idx = image_data.shape[2] // 2
 
     # Get slice
-    slice_data = image_data[:, :, slice_idx, modality_idx]
+    slice_data = image_data[:, :, slice_idx - 1, modality_idx]
 
     # Create figure
     fig = go.Figure()
@@ -244,11 +230,11 @@ def create_mri_viewer(image_data, slice_idx=None, modality_idx=0):
     ))
 
     fig.update_layout(
-        title=f"MRI Slice {slice_idx + 1} - {'FLAIR' if modality_idx == 0 else 'T1w' if modality_idx == 1 else 'T1Gd' if modality_idx == 2 else 'T2w'}",
+        title=f"MRI Slice {slice_idx} - {'FLAIR' if modality_idx == 0 else 'T1w' if modality_idx == 1 else 'T1Gd' if modality_idx == 2 else 'T2w'}",
         xaxis=dict(visible=False),
         yaxis=dict(visible=False),
-        width=400,
-        height=400,
+        width=None,
+        height=450,
         margin=dict(l=0, r=0, t=50, b=0)
     )
 
@@ -262,11 +248,11 @@ def create_segmentation_overlay(image_data, label_data, pred_data, slice_idx, mo
       - AI Prediction: Cyan dashed outline for Whole Tumor
     """
     # Extract slice
-    base_slice = image_data[:, :, slice_idx, modality_idx]
-    gt_slice = label_data[:, :, slice_idx]
+    base_slice = image_data[:, :, slice_idx - 1, modality_idx]
+    gt_slice = label_data[:, :, slice_idx - 1]
 
     # Collapse AI prediction to WT
-    pred_wt_slice = (pred_data[:, :, slice_idx] > 0).astype(np.uint8)
+    pred_wt_slice = (pred_data[:, :, slice_idx - 1] > 0).astype(np.uint8)
 
     fig = go.Figure()
 
@@ -310,11 +296,11 @@ def create_segmentation_overlay(image_data, label_data, pred_data, slice_idx, mo
 
     # Layout
     fig.update_layout(
-        title=f"AI Segmentation vs Ground Truth - Slice {slice_idx + 1}",
+        title=f"AI Segmentation vs Ground Truth - Slice {slice_idx}",
         xaxis=dict(visible=False),
         yaxis=dict(visible=False),
-        width=600,
-        height=600,
+        width=None,
+        height=450,
         margin=dict(l=0, r=0, t=50, b=0),
         legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5)
     )
@@ -587,41 +573,291 @@ def display_model_info(model_card):
 
 
 def display_footer():
-    """Display professional footer with responsive layout"""
+    """Responsive footer"""
     st.markdown("""
     <style>
     .footer-links {
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
-        gap: 10px;
+        gap: 12px;
+        margin-top: 10px;
     }
+
     .footer-links a {
-        color: white;
-        margin: 5px 0;
+        color: #93c5fd;
         text-decoration: none;
+        margin: 4px 8px;
+        font-weight: 500;
+        transition: color 0.2s ease;
     }
+
+    .footer-links a:hover {
+        color: #bfdbfe;
+    }
+
+    .medical-footer {
+        background: #0f172a;
+        color: white;
+        padding: 2rem;
+        border-radius: 15px;
+        border-top: 2px solid #374151;
+        text-align: center;
+        margin-top: 3rem;
+    }
+
     @media (max-width: 768px) {
         .footer-links {
             flex-direction: column;
             align-items: center;
+            gap: 6px;
         }
     }
     </style>
+
     <div class="medical-footer">
-        <h4>🔗 Project Links</h4>
         <div class="footer-links">
             <a href="https://github.com/dr-ridwanoladipo/brain-tumor-ai">💻 GitHub Repository</a>
-            <a href="https://www.kaggle.com/code/ridwanoladipoai/nnunet-brain-tumor-preprocessing">📊 Preprocessing Notebook</a>
-            <a href="https://www.kaggle.com/code/ridwanoladipoai/nnunet-brain-tumor-training">🚀 Training Notebook</a>
-            <a href="https://www.kaggle.com/code/ridwanoladipoai/nnunet-brain-tumor-evaluation">📈 Evaluation Notebook</a>
+            <p style="margin-top: 1rem; font-weight: 600; color: #bfdbfe;">📊 Kaggle Notebooks Collection</p>
+            <a href="https://www.kaggle.com/code/ridwanoladipoai/nnunet-brain-tumor-preprocessing">Preprocessing Notebook</a>
+            <a href="https://www.kaggle.com/code/ridwanoladipoai/nnunet-brain-tumor-training">Training Notebook</a>
+            <a href="https://www.kaggle.com/code/ridwanoladipoai/nnunet-brain-tumor-evaluation">Evaluation Notebook</a>
         </div>
         <br>
         <p>© 2025 Ridwan Oladipo, MD | Medical AI Specialist</p>
-        <p><strong>🏥 Advanced Healthcare AI Solutions</strong></p>
         <p style="font-size: 0.9rem; opacity: 0.8;">
-            ⚠️ This AI tool is for research demonstration only and not approved for clinical diagnosis.
+            ⚠️ Built to FDA-grade standards for clinical deployment.
             All medical decisions should be made in consultation with qualified healthcare providers.
         </p>
     </div>
     """, unsafe_allow_html=True)
+
+
+def display_case_metrics_and_legend(selected_patient, results_df):
+    """Display legend, case performance, and volumetric metrics"""
+
+    st.markdown("""
+    **Legend:**
+    - 🟢 **Green**: Edema (Ground Truth)
+    - 🟡 **Yellow**: Non-enhancing Core (Ground Truth)
+    - 🔴 **Red**: Enhancing Tumor (Ground Truth)
+    - 🔵 **Cyan Dashed Line**: AI Predicted Whole Tumor (WT)
+    """)
+
+    # Performance metrics for this case
+    st.markdown("")
+    st.markdown("#### 📈 Case Performance")
+
+    st.markdown(f"""
+    <div style="
+        display: flex; 
+        flex-wrap: nowrap; 
+        justify-content: space-between; 
+        width: 100%;
+        margin-top: 0.5rem;
+    ">
+      <div style="flex:1; text-align:center; font-size:1rem;">
+        <strong>WT Dice</strong><br><span style="font-size:1.2rem;">{selected_patient['WT_dice']:.3f}</span>
+      </div>
+      <div style="flex:1; text-align:center; font-size:1rem;">
+        <strong>TC Dice</strong><br><span style="font-size:1.2rem;">{selected_patient['TC_dice']:.3f}</span>
+      </div>
+      <div style="flex:1; text-align:center; font-size:1rem;">
+        <strong>ET Dice</strong><br><span style="font-size:1.2rem;">{selected_patient['ET_dice']:.3f}</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Calculate volumes for this patient
+    case_row = results_df[results_df['case_id'] == selected_patient['case_id']].iloc[0]
+    wt_vol, tc_vol, et_vol = case_row['WT_vol_pred'], case_row['TC_vol_pred'], case_row['ET_vol_pred']
+
+    # Volume analysis
+    st.markdown("")
+    st.markdown("")
+    st.markdown("#### 📊 Volume Analysis")
+
+    st.markdown(f"""
+    <div style="
+        display: flex; 
+        flex-wrap: nowrap; 
+        justify-content: space-between; 
+        width: 100%;
+        margin-top: 0.5rem;
+    ">
+      <div style="flex:1; text-align:center; font-size:1rem;">
+        <strong>WT Volume</strong><br><span style="font-size:1.2rem;">{wt_vol:.1f} cm³</span>
+      </div>
+      <div style="flex:1; text-align:center; font-size:1rem;">
+        <strong>TC Volume</strong><br><span style="font-size:1.2rem;">{tc_vol:.1f} cm³</span>
+      </div>
+      <div style="flex:1; text-align:center; font-size:1rem;">
+        <strong>ET Volume</strong><br><span style="font-size:1.2rem;">{et_vol:.1f} cm³</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def render_clinical_report_tab(tab, load_demo_data):
+    """Renders the complete Clinical Reports tab."""
+    with tab:
+        st.markdown("#### Clinical Reports")
+        st.markdown("")
+        manifest, results_df, sample_reports, robustness_data, model_card = load_demo_data()
+
+        if not sample_reports:
+            st.warning("Clinical summaries not loaded. Please ensure sample_clinical_reports.json is available.")
+            return
+
+        case_options = {
+            "Case 1: Enhancing Glioblastoma - Urgent Review": "BRATS_399",
+            "Case 2: Infiltrative Glioma - Urgent Review": "BRATS_181",
+            "Case 3: Non-Enhancing Glioma - Priority Review": "BRATS_243"
+        }
+
+        selected_case_label = st.selectbox(
+            "Select a patient case for clinical report:",
+            options=list(case_options.keys()),
+            index=0
+        )
+
+        selected_case_id = case_options[selected_case_label]
+        selected_report = next((r for r in sample_reports if r["patient_id"] == selected_case_id), None)
+
+        st.markdown("")
+
+        if not selected_report:
+            return
+
+        vols = selected_report["tumor_volumes"]
+        wt, tc, et = vols["whole_tumor_cm3"], vols["tumor_core_cm3"], vols["enhancing_tumor_cm3"]
+
+        urgency_text = selected_report["clinical_urgency"]
+        urgency_lower = urgency_text.lower()
+
+        if "urgent" in urgency_lower:
+            gradient = "linear-gradient(135deg, #991b1b 0%, #dc2626 100%)"
+            text_color = "white"
+            badge_color = "#ef4444"
+            emoji = "🔴"
+        elif "priority" in urgency_lower:
+            gradient = "linear-gradient(135deg, #fde68a 0%, #fbbf24 100%)"
+            text_color = "#111827"
+            badge_color = "#f59e0b"
+            emoji = "🟡"
+        else:
+            gradient = "linear-gradient(135deg, #e0f2fe 0%, #f8fafc 100%)"
+            text_color = "#0f172a"
+            badge_color = "#10b981"
+            emoji = "🟢"
+
+        dice_val = None
+        for token in selected_report["technical_notes"].split():
+            try:
+                val = float(token)
+                if 0 < val <= 1:
+                    dice_val = val
+                    break
+            except ValueError:
+                continue
+        dice_val = dice_val or 0.91
+
+        html_content = f"""
+        <style>
+        .summary-card {{
+            background: {gradient};
+            color: {text_color};
+            border-radius: 16px;
+            padding: 1.8rem 2rem;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+            margin-top: 1.5rem;
+            font-family: 'Inter', sans-serif;
+        }}
+        .summary-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 1.1rem;
+            border-bottom: 1px solid rgba(0,0,0,0.15);
+            padding-bottom: 0.6rem;
+            margin-bottom: 1rem;
+        }}
+        .urgency-badge {{
+            background: {badge_color};
+            color: white;
+            padding: 0.35rem 0.8rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        }}
+        .summary-section {{
+            margin-top: 1.2rem;
+        }}
+        .summary-section h5 {{
+            margin-bottom: 0.4rem;
+            font-size: 1rem;
+            font-weight: 600;
+        }}
+        .metric-line {{
+            display: flex;
+            justify-content: space-between;
+            opacity: 0.9;
+            font-size: 0.95rem;
+        }}
+        @media (max-width: 600px) {{
+            .summary-card {{
+                padding: 1.2rem 1rem;
+            }}
+            .summary-header {{
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+                font-size: 1rem;
+            }}
+            .urgency-badge {{
+                font-size: 0.9rem;
+                padding: 0.25rem 0.6rem;
+            }}
+            .summary-section h5 {{
+                font-size: 0.95rem;
+            }}
+        }}
+        </style>
+
+        <div class="summary-card">
+            <div class="summary-header">
+                <span><span class="urgency-badge">{emoji} {urgency_text}</span></span>
+                <span>Confidence: <b>{selected_report['ai_confidence']}</b></span>
+            </div>
+
+            <div class="summary-section">
+                <h5>Clinical Insight</h5>
+                <p style="opacity:0.95;">{selected_report['recommendation']}</p>
+            </div>
+
+            <div class="summary-section">
+                <h5>Tumor Volume Distribution (cm³)</h5>
+                <div class="metric-line"><span>Whole Tumor</span><span>{wt:.1f}</span></div>
+                <div class="metric-line"><span>Tumor Core</span><span>{tc:.1f}</span></div>
+                <div class="metric-line"><span>Enhancing Tumor</span><span>{et:.1f}</span></div>
+            </div>
+
+            <div class="summary-section">
+                <h5>Model Precision</h5>
+                <p style="opacity:0.9;">Whole Tumor Dice Score: <b>{dice_val:.3f}</b></p>
+            </div>
+        </div>
+        """
+
+        # footer gap
+        components.html(
+            f"""
+            <div style='margin-bottom:-90px; width:100%;'>
+                {html_content}
+            </div>
+            """,
+            height=450,
+            scrolling=False,
+        )

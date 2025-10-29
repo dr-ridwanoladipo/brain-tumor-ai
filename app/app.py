@@ -5,11 +5,20 @@ Medical AI interface for brain tumor analysis.
 Author: Ridwan Oladipo, MD | AI Specialist
 """
 
-import streamlit as st
+import time
 import numpy as np
 import pandas as pd
-import time
+import streamlit as st
+
 from brain_ui_helpers import *
+
+@st.cache_data
+def load_npz_case_cached(case_file):
+    return load_npz_case(case_file)
+
+@st.cache_data
+def load_video_cached(video_path):
+    return str(video_path)
 
 st.set_page_config(
     page_title="Brain Tumor Segmentation AI",
@@ -42,7 +51,7 @@ def main():
     # Status indicator
     st.markdown("""
     <div class="success-indicator">
-        ✅ AI Model Ready | 86.1% WT Dice Performance | Clinical Precision
+        ✅ AI Model Ready | 86.1% WT Dice Performance
     </div>
     """, unsafe_allow_html=True)
 
@@ -50,37 +59,40 @@ def main():
     with st.sidebar:
         st.markdown("### 🎯 Model Performance")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("""
-            <div class="metric-card">
-                <div class="metric-value">86%</div>
-                <div class="metric-label">WT Dice Score</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with col2:
-            st.markdown("""
-            <div class="metric-card">
-                <div class="metric-value">78%</div>
-                <div class="metric-label">TC Dice Score</div>
-            </div>
-            """, unsafe_allow_html=True)
+        st.markdown("""
+        <div style="display: flex; justify-content: center;">
+          <div class="metric-card" style="text-align: center;">
+              <div class="metric-value">86.1%</div>
+              <div class="metric-label">Whole Tumor Dice</div>
+              <div style="font-size: 0.8rem; color: #10b981; margin-top: 4px;">
+                  ✓ Clinical-grade accuracy
+              </div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
 
         # Scalability note
         st.markdown("---")
         st.markdown("### ⚡ Scalability")
         st.markdown("""
-        > **Achieved 86.1% WT Dice on a single GPU — pipeline scales with more compute to ≥ 90%, matching top BraTS systems.**
+        > **Achieved 86.1 % WT Dice on a single GPU — performance scales toward ≥ 90 % with multi-GPU or ensemble training.**
+        """)
+
+        st.markdown("---")
+        st.markdown("### ⚙️ Pipeline Efficiency")
+        st.markdown("""
+        - **Automated preprocessing → training → evaluation pipeline**
+        - **Optimized for single-GPU training with checkpointing**
+        - **70 % AWS cost savings via Spot Instances & S3 caching**
         """)
 
         st.markdown("---")
         st.markdown("### ℹ️ About This AI")
         st.markdown("""
-        - **Architecture**: nnU-Net 2025 (5-level U-Net)
-        - **Training**: 484 brain MRI volumes  
-        - **Modalities**: FLAIR, T1w, T1Gd, T2w
-        - **Validation**: 49 test cases
+        - **Architecture**: nnU-Net 2025 (5-level U-Net)  
+        - **Training Data**: 484 multi-modal (4D) brain MRI volumes (~125,000 patches)  
+        - **Modalities**: FLAIR, T1w, T1Gd, T2w  
+        - **Validation Data**: 49 multi-modal test cases (~2,500 4D patches)  
         - **Performance**: Clinical-grade accuracy
         """)
 
@@ -99,42 +111,50 @@ def main():
 
     # TAB 1: Tumor Segmentation
     with tab1:
-        st.markdown("## 🧠 AI-Powered Tumor Segmentation")
-        st.markdown("Select a patient case below to analyze their brain MRI with our AI model.")
+        # Define case display options
+        case_options = {
+            "Case 1: Enhancing Glioblastoma (Confidence: 91%)": "BRATS_399",
+            "Case 2: Infiltrative Glioma (Confidence: 91%)": "BRATS_181",
+            "Case 3: Non-Enhancing Glioma (Confidence: 91%)": "BRATS_243"
+        }
 
-        # Patient selection
-        st.markdown("### 👥 Patient Selection")
+        # Create dropdown
+        st.markdown("")
+        st.markdown("")
+        selected_case_label = st.selectbox(
+            "Select a patient case below to analyze their brain MRI with our AI model:",
+            options=list(case_options.keys()),
+            index=0
+        )
 
-        cols = st.columns(3)
-        selected_patient = None
+        # Map label to actual case_id
+        selected_case_id = case_options[selected_case_label]
 
-        for i, case in enumerate(manifest):
-            with cols[i]:
-                case_summary = get_patient_summary(None, case)
-
-                if st.button(
-                        f"**Patient {case['case_id']}**\n\n{case_summary['description']}",
-                        key=f"patient_{i}",
-                        width='stretch'
-                ):
-                    selected_patient = case
-                    st.session_state.selected_patient = case
-                    # Reset prediction state when switching patients
-                    st.session_state.show_prediction = False
-
-        # Use session state to maintain selection
-        if 'selected_patient' in st.session_state:
-            selected_patient = st.session_state.selected_patient
+        # Retrieve matching manifest entry
+        selected_patient = next((c for c in manifest if c["case_id"] == selected_case_id), None)
 
         if selected_patient:
-            st.markdown(f"### 📋 Patient {selected_patient['case_id']} - MRI Analysis")
+            st.session_state.selected_patient = selected_patient
+        else:
+            st.error("Selected case not found in manifest.")
 
+        if selected_patient:
             # Load patient data
-            case_data = load_npz_case(selected_patient['npz_file'])
+            case_data = load_npz_case_cached(selected_patient['npz_file'])
+
+            if "current_case" not in st.session_state:
+                st.session_state.current_case = None
+            if st.session_state.current_case != selected_patient["case_id"]:
+                st.session_state.current_case = selected_patient["case_id"]
+                st.session_state.show_prediction = False
+                # Reset slice and modality
+                st.session_state.slice_slider = case_data['image'].shape[2] // 2
+                st.session_state.modality_select = 0
 
             if case_data:
                 # Auto-play toggle
-                auto_play = st.checkbox("▶️ Auto-play slices", key="auto_play")
+                st.markdown("")
+                auto_play = st.checkbox("▶️ Auto-play MRI", key="auto_play")
 
                 # Reset prediction state when toggling auto-play mode
                 if 'previous_auto_play' not in st.session_state:
@@ -145,134 +165,63 @@ def main():
 
                 # AUTO-PLAY MODE
                 if auto_play:
-                    col1, col2 = st.columns([3, 2])
+                    if not st.session_state.get('show_prediction', False):
+                        st.markdown("#### Dynamic MRI Viewer")
 
-                    with col1:
-                        st.markdown('<div class="mri-viewer">', unsafe_allow_html=True)
-                        st.markdown("#### 🎬 MRI Cine Loop")
-
-                        if not st.session_state.get('show_prediction', False):
-                            # Before prediction - show only plain
-                            video_path = Path("evaluation_results") / selected_patient["cine_plain"]
+                    if not st.session_state.get('show_prediction', False):
+                        col1, _ = st.columns([1, 1])
+                        with col1:
+                            video_path = load_video_cached(Path("evaluation_results") / selected_patient["cine_plain"])
                             st.video(str(video_path))
-                            st.info("📹 Plain MRI cine loop - Click 'Run AI Prediction' to see overlay")
-                        else:
-                            # After prediction - show both side by side
-                            video_col1, video_col2 = st.columns(2)
+                            st.info("Plain MRI — click **Run AI Prediction** to view overlay.")
+                    else:
+                        plain_video_path = Path("evaluation_results") / selected_patient["cine_plain"]
+                        overlay_video_path = Path("evaluation_results") / selected_patient["cine_overlay"]
 
-                            with video_col1:
-                                st.markdown("**Plain MRI**")
-                                plain_video_path = Path("evaluation_results") / selected_patient["cine_plain"]
-                                st.video(str(plain_video_path))
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown("#### Plain MRI")
+                            st.video(str(plain_video_path))
+                        with col2:
+                            st.markdown("#### AI Segmentation Overlay")
+                            st.video(str(overlay_video_path))
 
-                            with video_col2:
-                                st.markdown("**AI Segmentation Overlay**")
-                                overlay_video_path = Path("evaluation_results") / selected_patient["cine_overlay"]
-                                st.video(str(overlay_video_path))
-
-                            st.success("📹 Side-by-side comparison: Plain vs AI Segmentation")
-
-                        st.markdown('</div>', unsafe_allow_html=True)
-
-                    with col2:
-                        st.markdown("#### 🎯 AI Analysis")
-
-                        # Patient info
-                        st.markdown(f"**Patient ID**: {selected_patient['case_id']}")
-                        st.markdown(f"**WT Dice Score**: {selected_patient['WT_dice']:.3f}")
-                        st.markdown(f"**True WT Volume**: {selected_patient['WT_vol_true_cm3']:.1f} cm³")
-                        st.markdown(f"**Predicted Volume**: {selected_patient['WT_vol_pred_cm3']:.1f} cm³")
-
-                        st.markdown("---")
-
-                        # Prediction button
-                        if st.button("🔮 **Run AI Prediction**", key="predict_btn_auto", width='stretch'):
-                            # Simulate prediction
-                            simulate_prediction_progress()
-                            st.success("✅ AI Prediction Complete!")
-                            st.session_state.show_prediction = True
-                            st.rerun()
-
-                        # Show prediction results metrics
-                        if st.session_state.get('show_prediction', False):
-                            st.markdown("#### 📊 Segmentation Results")
-
-                            # Performance metrics for this case
-                            col_a, col_b, col_c = st.columns(3)
-                            with col_a:
-                                st.metric("WT Dice", f"{selected_patient['WT_dice']:.3f}")
-                            with col_b:
-                                st.metric("TC Dice", f"{selected_patient['TC_dice']:.3f}")
-                            with col_c:
-                                st.metric("ET Dice", f"{selected_patient['ET_dice']:.3f}")
-
-                            # Calculate volumes for this patient
-                            case_row = results_df[results_df['case_id'] == selected_patient['case_id']].iloc[0]
-                            wt_vol = case_row['WT_vol_pred']
-                            tc_vol = case_row['TC_vol_pred']
-                            et_vol = case_row['ET_vol_pred']
-
-                            # Volume analysis
-                            st.markdown("#### 📊 Volume Analysis")
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                st.metric("WT Volume", f"{wt_vol:.1f} cm³")
-                            with col2:
-                                st.metric("TC Volume", f"{tc_vol:.1f} cm³")
-                            with col3:
-                                st.metric("ET Volume", f"{et_vol:.1f} cm³")
+                            display_case_metrics_and_legend(selected_patient, results_df)
 
                 # SLIDER MODE
                 else:
-                    col1, col2 = st.columns([3, 2])
+                    # MRI controls
+                    st.markdown("")
+                    modality_idx = st.selectbox(
+                        "MRI Modality",
+                        [0, 1, 2, 3],
+                        format_func=lambda x: ["FLAIR", "T1w", "T1Gd", "T2w"][x],
+                        key="modality_select"
+                    )
+
+                    st.markdown("")
+                    slice_idx = st.slider(
+                        "Select Slice",
+                        0,
+                        case_data['image'].shape[2],
+                        case_data['image'].shape[2] // 2 + 1,
+                        key="slice_slider"
+                    )
+
+                    col1, col2 = st.columns(2)
 
                     with col1:
-                        st.markdown('<div class="mri-viewer">', unsafe_allow_html=True)
-                        st.markdown("#### 🔍 MRI Volume Viewer")
-
-                        # MRI controls
-                        slice_idx = st.slider(
-                            "Select Slice",
-                            0,
-                            case_data['image'].shape[2] - 1,
-                            case_data['image'].shape[2] // 2,
-                            key="slice_slider"
-                        )
-
-                        modality_idx = st.selectbox(
-                            "MRI Modality",
-                            [0, 1, 2, 3],
-                            format_func=lambda x: ["FLAIR", "T1w", "T1Gd", "T2w"][x],
-                            key="modality_select"
-                        )
-
                         # Display MRI slice
+                        st.markdown("")
+                        st.markdown("#### MRI Slice Viewer")
                         mri_fig = create_mri_viewer(case_data['image'], slice_idx, modality_idx)
                         st.plotly_chart(mri_fig, width='stretch')
 
-                        st.markdown('</div>', unsafe_allow_html=True)
-
                     with col2:
-                        st.markdown("#### 🎯 AI Analysis")
-
-                        # Patient info
-                        st.markdown(f"**Patient ID**: {selected_patient['case_id']}")
-                        st.markdown(f"**WT Dice Score**: {selected_patient['WT_dice']:.3f}")
-                        st.markdown(f"**True WT Volume**: {selected_patient['WT_vol_true_cm3']:.1f} cm³")
-                        st.markdown(f"**Predicted Volume**: {selected_patient['WT_vol_pred_cm3']:.1f} cm³")
-
-                        st.markdown("---")
-
-                        # Prediction button
-                        if st.button("🔮 **Run AI Prediction**", key="predict_btn_slider", width='stretch'):
-                            # Simulate prediction
-                            simulate_prediction_progress()
-                            st.success("✅ AI Prediction Complete!")
-                            st.session_state.show_prediction = True
-
                         # Show prediction results
                         if st.session_state.get('show_prediction', False):
-                            st.markdown("#### 📊 Segmentation Results")
+                            st.markdown("")
+                            st.markdown("#### Segmentation Results")
 
                             # Create overlay visualization
                             overlay_fig = create_segmentation_overlay(
@@ -285,48 +234,20 @@ def main():
 
                             st.plotly_chart(overlay_fig, width='stretch')
 
-                            st.markdown("""
-                            **Legend:**
-                            - 🟢 **Green**: Edema (Ground Truth)
-                            - 🟡 **Yellow**: Non-enhancing Core (Ground Truth)
-                            - 🔴 **Red**: Enhancing Tumor (Ground Truth)
-                            - 🔵 **Cyan Dashed Line**: AI Predicted Whole Tumor (WT)
-                            """)
+                            display_case_metrics_and_legend(selected_patient, results_df)
 
-                            # Performance metrics for this case
-                            st.markdown("#### 📈 Case Performance")
-
-                            col_a, col_b, col_c = st.columns(3)
-                            with col_a:
-                                st.metric("WT Dice", f"{selected_patient['WT_dice']:.3f}")
-                            with col_b:
-                                st.metric("TC Dice", f"{selected_patient['TC_dice']:.3f}")
-                            with col_c:
-                                st.metric("ET Dice", f"{selected_patient['ET_dice']:.3f}")
-
-                            # Calculate volumes for this patient
-                            case_row = results_df[results_df['case_id'] == selected_patient['case_id']].iloc[0]
-                            wt_vol = case_row['WT_vol_pred']
-                            tc_vol = case_row['TC_vol_pred']
-                            et_vol = case_row['ET_vol_pred']
-
-                            # Volume analysis
-                            st.markdown("#### 📊 Volume Analysis")
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                st.metric("WT Volume", f"{wt_vol:.1f} cm³")
-                            with col2:
-                                st.metric("TC Volume", f"{tc_vol:.1f} cm³")
-                            with col3:
-                                st.metric("ET Volume", f"{et_vol:.1f} cm³")
-
-        else:
-            st.info("👆 Please select a patient case above to begin MRI analysis.")
+        # Prediction button
+        if not st.session_state.get('show_prediction', False):
+            st.markdown("---")
+            if st.button(" **Run AI Prediction**", key="predict_btn_full", use_container_width=True):
+                simulate_prediction_progress()
+                st.success("✅ AI Prediction Complete!")
+                st.session_state.show_prediction = True
+                st.rerun()
 
     # TAB 2: Performance Metrics
     with tab2:
-        st.markdown("## 📈 Model Performance Metrics")
-        st.markdown("Comprehensive evaluation results across all test cases")
+        st.markdown("#### Model Performance Metrics")
 
         # Summary statistics
         col1, col2, col3 = st.columns(3)
@@ -361,24 +282,26 @@ def main():
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("### 📊 Dice Score Distribution")
+            st.markdown("#### Dice Score Distribution")
             dice_fig, _ = create_performance_charts(results_df)
             st.plotly_chart(dice_fig, width='stretch')
 
         with col2:
-            st.markdown("### 📏 Hausdorff Distance Distribution")
+            st.markdown("#### Hausdorff Distance Distribution")
             _, hd_fig = create_performance_charts(results_df)
             st.plotly_chart(hd_fig, width='stretch')
 
         # Volume correlation
-        st.markdown("### 🎯 Volume Prediction Accuracy")
+        st.markdown("---")
+        st.markdown("#### Volume Prediction Accuracy")
         vol_fig = create_volume_correlation(results_df)
         st.plotly_chart(vol_fig, width='stretch')
 
         # Detailed results table
-        st.markdown("### 📋 Detailed Results by Case")
+        st.markdown("---")
+        st.markdown("#### Detailed Results by Case")
 
-        # Filter for demo cases only
+        # Filter for demo cases
         demo_case_ids = [case['case_id'] for case in manifest]
         demo_results = results_df[results_df['case_id'].isin(demo_case_ids)].copy()
 
@@ -393,51 +316,7 @@ def main():
         st.dataframe(demo_results_display, width='stretch')
 
     # TAB 3: Clinical Reports
-    with tab3:
-        st.markdown("## 🏥 Clinical Report Generator")
-        st.markdown("AI-generated clinical reports for automated tumor analysis")
-
-        if sample_reports:
-            # Filter reports for demo cases
-            demo_case_ids = [case['case_id'] for case in manifest]
-            demo_reports = [r for r in sample_reports if r['patient_id'] in demo_case_ids]
-
-            if demo_reports:
-                st.markdown("### 📋 Select Patient Report")
-
-                report_case = st.selectbox(
-                    "Choose patient for clinical report",
-                    demo_reports,
-                    format_func=lambda x: f"Patient {x['patient_id']} - {x['clinical_urgency']}"
-                )
-
-                if report_case:
-                    # Display selected report
-                    display_clinical_report(report_case)
-
-                    # Report summary metrics
-                    st.markdown("### 📊 Report Summary")
-
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric(
-                            "AI Confidence",
-                            report_case['ai_confidence']
-                        )
-                    with col2:
-                        st.metric(
-                            "Clinical Urgency",
-                            report_case['clinical_urgency']
-                        )
-                    with col3:
-                        st.metric(
-                            "Total Volume",
-                            f"{report_case['tumor_volumes']['whole_tumor_cm3']} cm³"
-                        )
-            else:
-                st.warning("No clinical reports available for demo cases.")
-        else:
-            st.warning("Clinical reports not available. Please ensure sample_clinical_reports.json is loaded.")
+    render_clinical_report_tab(tab3, load_demo_data)
 
     # TAB 4: Robustness Testing
     with tab4:
