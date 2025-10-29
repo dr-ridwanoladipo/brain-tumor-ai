@@ -326,10 +326,10 @@ def create_performance_charts(results_df):
         ))
 
     fig_dice.update_layout(
-        title="Dice Scores by Tumor Region",
         yaxis_title="Dice Coefficient",
         showlegend=False,
-        height=400
+        height=400,
+        margin=dict(t=20)
     )
 
     # Hausdorff distances
@@ -345,10 +345,10 @@ def create_performance_charts(results_df):
         ))
 
     fig_hd.update_layout(
-        title="Hausdorff Distances by Tumor Region",
         yaxis_title="Distance (mm)",
         showlegend=False,
-        height=400
+        height=400,
+        margin=dict(t=20)
     )
 
     return fig_dice, fig_hd
@@ -381,10 +381,10 @@ def create_volume_correlation(results_df):
     ))
 
     fig.update_layout(
-        title="Volume Correlation - Whole Tumor",
         xaxis_title="True Volume (cm³)",
         yaxis_title="Predicted Volume (cm³)",
-        height=400
+        height=400,
+        margin=dict(t=20)
     )
 
     return fig
