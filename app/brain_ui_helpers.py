@@ -162,6 +162,18 @@ def load_custom_css():
         object-fit: contain !important;
     }
 
+    /* Mobile divider for robustness charts */
+    @media (max-width: 768px) {
+        .mobile-divider {
+            display: block !important;
+            height: 2px !important;
+            background: #e5e7eb !important;
+            margin: 1.5rem 0 !important;
+            width: 100% !important;
+        }
+    }
+
+
     </style>
     """, unsafe_allow_html=True)
 
@@ -426,10 +438,10 @@ def create_robustness_charts(robustness_data):
         ))
 
     fig_noise.update_layout(
-        title="Robustness to Gaussian Noise",
         xaxis_title="Noise Level (σ)",
         yaxis_title="Dice Score",
-        height=400
+        height=400,
+        margin=dict(t=20)
     )
 
     # Intensity shift robustness
@@ -460,10 +472,10 @@ def create_robustness_charts(robustness_data):
         ))
 
     fig_intensity.update_layout(
-        title="Robustness to Intensity Shifts",
         xaxis_title="Intensity Shift Factor",
         yaxis_title="Dice Score",
-        height=400
+        height=400,
+        margin=dict(t=20)
     )
 
     return fig_noise, fig_intensity

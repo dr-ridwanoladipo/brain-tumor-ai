@@ -352,7 +352,8 @@ def main():
 
     # TAB 4: Robustness Testing
     with tab4:
-        st.markdown("## 🧪 Robustness Testing Results")
+        st.markdown("")
+        st.markdown("#### Robustness Testing Results")
         st.markdown("Model stability analysis under various imaging conditions")
 
         if robustness_data and robustness_data.get('noise'):
@@ -360,28 +361,40 @@ def main():
             noise_fig, intensity_fig = create_robustness_charts(robustness_data)
 
             if noise_fig and intensity_fig:
+                st.markdown("")
+                st.markdown("")
                 col1, col2 = st.columns(2)
 
                 with col1:
-                    st.markdown("### 🔊 Noise Robustness")
+                    st.markdown("#### 🔊 Noise Robustness")
                     st.plotly_chart(noise_fig, width='stretch')
+                    st.markdown("""
+                    <div style="background: #f8fafc; border-left: 4px solid #0f172a; border-right: 4px solid #0f172a;
+                                 padding: 0.8rem 1rem; border-radius: 10px; margin-top: 0.6rem;
+                                 box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                    <b>Clinical Insight:</b> Stable Dice performance across increasing noise levels demonstrates strong imaging robustness — ensuring consistent tumor segmentation accuracy even in low-quality or heterogeneous MRI acquisitions common in multi-center clinical settings.
+                    </div>
+                    """, unsafe_allow_html=True)
 
                     st.markdown("""
-                    **Analysis**: Model maintains stable performance across different noise levels,
-                    demonstrating robustness to scanner variations and acquisition artifacts.
-                    """)
+                    <div class="mobile-divider"></div>
+                    """, unsafe_allow_html=True)
 
                 with col2:
-                    st.markdown("### 🎛️ Intensity Robustness")
+                    st.markdown("#### 🎛️ Intensity Robustness")
                     st.plotly_chart(intensity_fig, width='stretch')
 
                     st.markdown("""
-                    **Analysis**: Performance remains consistent across intensity variations,
-                    showing adaptability to different MRI scanner settings and protocols.
-                    """)
+                    <div style="background: #f8fafc; border-left: 4px solid #0f172a; border-right: 4px solid #0f172a;
+                                 padding: 0.8rem 1rem; border-radius: 10px; margin-top: 0.6rem;
+                                 box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                    <b>Clinical Insight:</b> Minimal Dice variation across intensity shifts confirms strong contrast normalization and scanner harmonization — ensuring accurate segmentation despite differences in MRI brightness, calibration, patient hydration, or contrast across institutions.
+                    </div>
+                    """, unsafe_allow_html=True)
 
                 # Summary statistics
-                st.markdown("### 📈 Robustness Summary")
+                st.markdown("---")
+                st.markdown("#### Robustness Summary")
 
                 try:
                     if 'noise' in robustness_data and '0.05' in robustness_data['noise'] and '0.15' in robustness_data['noise']:
