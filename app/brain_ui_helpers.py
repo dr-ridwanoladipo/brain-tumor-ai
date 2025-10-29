@@ -24,11 +24,11 @@ def load_custom_css():
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
     /* Hide Streamlit's default chrome */
-    #MainMenu, footer, header, .stDeployButton {visibility: hidden;}
+    #MainMenu, footer, .stAppDeployButton {display: none !important;}
 
     /* Reduce top/bottom padding of main container */
     div.block-container {
-        padding-top: 1rem !important;
+        padding-top: 2.7rem !important;
         padding-bottom: 2rem !important;
         margin-top: 0rem !important;
         margin-bottom: 7rem !important;

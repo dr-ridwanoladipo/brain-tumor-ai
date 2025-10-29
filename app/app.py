@@ -11,26 +11,11 @@ import pandas as pd
 import time
 from brain_ui_helpers import *
 
-# ================ 🛠 SIDEBAR TOGGLE ================
-if 'sidebar_state' not in st.session_state:
-    st.session_state.sidebar_state = 'expanded'
-
 st.set_page_config(
-    page_title="Brain Tumor AI",
+    page_title="Brain Tumor Segmentation AI",
     page_icon="🧠",
     layout="wide",
-    initial_sidebar_state=st.session_state.sidebar_state
-)
-
-if st.button("🧠", help="Toggle sidebar"):
-    st.session_state.sidebar_state = (
-        'collapsed' if st.session_state.sidebar_state == 'expanded' else 'expanded'
-    )
-    st.rerun()
-
-st.markdown(
-    '<div style="font-size:0.75rem; color:#6b7280; margin-top:-10px;">Menu</div>',
-    unsafe_allow_html=True
+    initial_sidebar_state="expanded"
 )
 
 def main():
@@ -130,7 +115,7 @@ def main():
                 if st.button(
                         f"**Patient {case['case_id']}**\n\n{case_summary['description']}",
                         key=f"patient_{i}",
-                        use_container_width=True
+                        width='stretch'
                 ):
                     selected_patient = case
                     st.session_state.selected_patient = case
@@ -201,7 +186,7 @@ def main():
                         st.markdown("---")
 
                         # Prediction button
-                        if st.button("🔮 **Run AI Prediction**", key="predict_btn_auto", use_container_width=True):
+                        if st.button("🔮 **Run AI Prediction**", key="predict_btn_auto", width='stretch'):
                             # Simulate prediction
                             simulate_prediction_progress()
                             st.success("✅ AI Prediction Complete!")
@@ -263,7 +248,7 @@ def main():
 
                         # Display MRI slice
                         mri_fig = create_mri_viewer(case_data['image'], slice_idx, modality_idx)
-                        st.plotly_chart(mri_fig, use_container_width=True)
+                        st.plotly_chart(mri_fig, width='stretch')
 
                         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -279,7 +264,7 @@ def main():
                         st.markdown("---")
 
                         # Prediction button
-                        if st.button("🔮 **Run AI Prediction**", key="predict_btn_slider", use_container_width=True):
+                        if st.button("🔮 **Run AI Prediction**", key="predict_btn_slider", width='stretch'):
                             # Simulate prediction
                             simulate_prediction_progress()
                             st.success("✅ AI Prediction Complete!")
@@ -298,7 +283,7 @@ def main():
                                 modality_idx
                             )
 
-                            st.plotly_chart(overlay_fig, use_container_width=True)
+                            st.plotly_chart(overlay_fig, width='stretch')
 
                             st.markdown("""
                             **Legend:**
@@ -378,17 +363,17 @@ def main():
         with col1:
             st.markdown("### 📊 Dice Score Distribution")
             dice_fig, _ = create_performance_charts(results_df)
-            st.plotly_chart(dice_fig, use_container_width=True)
+            st.plotly_chart(dice_fig, width='stretch')
 
         with col2:
             st.markdown("### 📏 Hausdorff Distance Distribution")
             _, hd_fig = create_performance_charts(results_df)
-            st.plotly_chart(hd_fig, use_container_width=True)
+            st.plotly_chart(hd_fig, width='stretch')
 
         # Volume correlation
         st.markdown("### 🎯 Volume Prediction Accuracy")
         vol_fig = create_volume_correlation(results_df)
-        st.plotly_chart(vol_fig, use_container_width=True)
+        st.plotly_chart(vol_fig, width='stretch')
 
         # Detailed results table
         st.markdown("### 📋 Detailed Results by Case")
@@ -405,7 +390,7 @@ def main():
         demo_results_display.columns = ['Case ID', 'WT Dice', 'TC Dice', 'ET Dice',
                                        'True Volume (cm³)', 'Pred Volume (cm³)', 'Time (s)']
 
-        st.dataframe(demo_results_display, use_container_width=True)
+        st.dataframe(demo_results_display, width='stretch')
 
     # TAB 3: Clinical Reports
     with tab3:
@@ -468,7 +453,7 @@ def main():
 
                 with col1:
                     st.markdown("### 🔊 Noise Robustness")
-                    st.plotly_chart(noise_fig, use_container_width=True)
+                    st.plotly_chart(noise_fig, width='stretch')
 
                     st.markdown("""
                     **Analysis**: Model maintains stable performance across different noise levels,
@@ -477,7 +462,7 @@ def main():
 
                 with col2:
                     st.markdown("### 🎛️ Intensity Robustness")
-                    st.plotly_chart(intensity_fig, use_container_width=True)
+                    st.plotly_chart(intensity_fig, width='stretch')
 
                     st.markdown("""
                     **Analysis**: Performance remains consistent across intensity variations,
