@@ -147,9 +147,11 @@ def main():
             if st.session_state.current_case != selected_patient["case_id"]:
                 st.session_state.current_case = selected_patient["case_id"]
                 st.session_state.show_prediction = False
-                # Reset slice and modality
-                st.session_state.slice_slider = case_data['image'].shape[2] // 2
-                st.session_state.modality_select = 0
+                # initialize slice and modality
+                if "slice_slider" not in st.session_state:
+                    st.session_state.slice_slider = case_data['image'].shape[2] // 2
+                if "modality_select" not in st.session_state:
+                    st.session_state.modality_select = 0
 
             if case_data:
                 # Auto-play toggle
@@ -195,6 +197,7 @@ def main():
                     modality_idx = st.selectbox(
                         "MRI Modality",
                         [0, 1, 2, 3],
+                        index=st.session_state.modality_select if "modality_select" in st.session_state else 0,
                         format_func=lambda x: ["FLAIR", "T1w", "T1Gd", "T2w"][x],
                         key="modality_select"
                     )
@@ -204,7 +207,7 @@ def main():
                         "Select Slice",
                         0,
                         case_data['image'].shape[2],
-                        case_data['image'].shape[2] // 2 + 1,
+                        st.session_state.slice_slider,
                         key="slice_slider"
                     )
 
