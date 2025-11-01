@@ -1,0 +1,25 @@
+# ── Version control ───────────────────────────────
+.git
+.gitignore
+
+# ── Documentation ─────────────────────────────────
+README.md
+LICENSE
+
+# ── CI/CD configuration ───────────────────────────
+.github/
+task-definition.json
+
+# ── Development artifacts ─────────────────────────
+notebooks/
+utility/
+
+# ── Backend / Training / Non-UI code ──────────────
+api/
+brain-tumor-data/
+brain-tumor-eval/
+preprocess/
+sagemaker/
+training/
+convert_to_onnx.py
+requirements.txt
