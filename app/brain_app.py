@@ -44,12 +44,15 @@ def main():
     with st.spinner("Loading AI model and demo data..."):
         manifest, results_df, sample_reports, robustness_data, model_card = load_demo_data()
 
-    # Preload demo MRI cases
+    # Lazy metadata preload
     if "preloaded_cases" not in st.session_state:
-        with st.spinner("Preloading demo MRI volumes..."):
-            for case_entry in manifest:
-                load_npz_case_cached(case_entry['npz_file'])
-        st.session_state["preloaded_cases"] = True
+        st.session_state["preloaded_cases"] = {
+            c["case_id"]: {
+                "npz_file": c["npz_file"],
+                "cine_plain": c["cine_plain"],
+                "cine_overlay": c["cine_overlay"]
+            } for c in manifest
+        }
 
     if manifest is None:
         st.error("Failed to load demo data. Please ensure all data files are present.")
@@ -213,9 +216,8 @@ def main():
                     st.markdown("")
                     slice_idx = st.slider(
                         "Select Slice",
-                        0,
+                        1,
                         case_data['image'].shape[2],
-                        st.session_state.slice_slider,
                         key="slice_slider"
                     )
 
