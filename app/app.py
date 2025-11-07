@@ -44,6 +44,13 @@ def main():
     with st.spinner("Loading AI model and demo data..."):
         manifest, results_df, sample_reports, robustness_data, model_card = load_demo_data()
 
+    # Preload demo MRI cases
+    if "preloaded_cases" not in st.session_state:
+        with st.spinner("Preloading demo MRI volumes..."):
+            for case_entry in manifest:
+                load_npz_case_cached(case_entry['npz_file'])
+        st.session_state["preloaded_cases"] = True
+
     if manifest is None:
         st.error("Failed to load demo data. Please ensure all data files are present.")
         return
@@ -140,7 +147,8 @@ def main():
 
         if selected_patient:
             # Load patient data
-            case_data = load_npz_case_cached(selected_patient['npz_file'])
+            with st.spinner("Loading MRI volume... please wait ⏳"):
+                case_data = load_npz_case_cached(selected_patient['npz_file'])
 
             if "current_case" not in st.session_state:
                 st.session_state.current_case = None
