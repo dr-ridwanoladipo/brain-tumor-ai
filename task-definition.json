@@ -1,0 +1,50 @@
+{
+  "family": "brain-ai-task",
+  "requiresCompatibilities": ["FARGATE"],
+  "networkMode": "awsvpc",
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::098824477125:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "brain-ai",
+      "image": "REPLACE_IMAGE_URI",
+      "portMappings": [
+        {
+          "containerPort": 8501,
+          "protocol": "tcp",
+          "name": "streamlit-port"
+        }
+      ],
+      "essential": true,
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/brain-ai",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "stopTimeout": 120,
+      "startTimeout": 300
+    }
+  ],
+  "tags": [
+    {
+      "key": "Project",
+      "value": "BrainTumorAI"
+    },
+    {
+      "key": "Environment",
+      "value": "Production"
+    },
+    {
+      "key": "Owner",
+      "value": "RidwanOladipo-MD"
+    },
+    {
+      "key": "Application",
+      "value": "Brain-Tumor-Segmentation-AI"
+    }
+  ]
+}
