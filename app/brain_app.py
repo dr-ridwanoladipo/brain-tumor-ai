@@ -12,7 +12,7 @@ import streamlit as st
 
 from brain_ui_helpers import *
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_npz_case_cached(case_file):
     return load_npz_case(case_file)
 
@@ -44,15 +44,12 @@ def main():
     with st.spinner("Loading AI model and demo data..."):
         manifest, results_df, sample_reports, robustness_data, model_card = load_demo_data()
 
-    # Lazy metadata preload
+    # Preload demo MRI cases
     if "preloaded_cases" not in st.session_state:
-        st.session_state["preloaded_cases"] = {
-            c["case_id"]: {
-                "npz_file": c["npz_file"],
-                "cine_plain": c["cine_plain"],
-                "cine_overlay": c["cine_overlay"]
-            } for c in manifest
-        }
+        with st.spinner("Preloading demo MRI volumes..."):
+            for case_entry in manifest:
+                load_npz_case_cached(case_entry['npz_file'])
+        st.session_state["preloaded_cases"] = True
 
     if manifest is None:
         st.error("Failed to load demo data. Please ensure all data files are present.")
