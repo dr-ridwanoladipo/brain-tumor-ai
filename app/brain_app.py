@@ -155,11 +155,9 @@ def main():
             if st.session_state.current_case != selected_patient["case_id"]:
                 st.session_state.current_case = selected_patient["case_id"]
                 st.session_state.show_prediction = False
-                # initialize slice and modality
-                if "slice_slider" not in st.session_state:
-                    st.session_state.slice_slider = case_data['image'].shape[2] // 2
-                if "modality_select" not in st.session_state:
-                    st.session_state.modality_select = 0
+                # Reset to middle slice and default modality when switching cases
+                st.session_state.slice_slider = case_data['image'].shape[2] // 2
+                st.session_state.modality_select = 0
 
             if case_data:
                 # Auto-play toggle
@@ -172,6 +170,8 @@ def main():
                 elif st.session_state.previous_auto_play != auto_play:
                     st.session_state.show_prediction = False
                     st.session_state.previous_auto_play = auto_play
+                    # preserve the current slice position when toggling cine loop
+                    st.session_state.slice_slider = st.session_state.get("slice_slider", case_data['image'].shape[2] // 2)
 
                 # AUTO-PLAY MODE
                 if auto_play:
