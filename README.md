@@ -9,11 +9,11 @@
 
 [![🎬 UI Demo](https://img.shields.io/badge/🎬_UI_Demo-Live-blue?style=flat-square)](https://huggingface.co/spaces/RidwanOladipo/brain-tumor-ai-ui)
 [![🔗 API Demo](https://img.shields.io/badge/🔗_API_Demo-Live-green?style=flat-square)](https://huggingface.co/spaces/RidwanOladipo/brain-tumor-ai-api)  
-[![🚀 Production Ready (AWS ECS Fargate)](https://img.shields.io/badge/🚀_Production-brain--tumor--ai.mednexai.com-f59e0b?style=flat-square)](#-deployment-options)
+[![🚀 Production Ready (AWS ECS Fargate)](https://img.shields.io/badge/🚀_Production-brain.mednexai.com-f59e0b?style=flat-square)](#-deployment-options)
 
 ##### 🌐 Deployment Options:
 - **Live Demos**: Instant access via HuggingFace (UI + API)
-- **Production (On-Demand)**: Fully deployed on AWS ECS Fargate at *brain-tumor-ai.mednexai.com* — **available by request**  
+- **Production (On-Demand)**: Fully deployed on AWS ECS Fargate at *brain.mednexai.com* — **available by request**  
 >⚡ **Rapid activation in 30–60 minutes** for demonstrations, evaluations, or technical reviews  
 
 ---
@@ -30,7 +30,7 @@
 
 </div>
 
->⚡ **Scalability Note**: Achieved 86.1% WT Dice on a single GPU — pipeline scales with more compute to ≥ 90%, matching top BraTS systems.
+>⚡ **Scalability Note**: Achieved 86.1 % WT Dice on a single GPU — performance scales toward ≥ 90 % with multi-GPU or ensemble training.
 
 ---
 
@@ -217,7 +217,8 @@ brain-tumor-ai/
 ├── evaluation_results/  # Performance outputs & clinical reports  
 ├── notebooks/           # Kaggle development notebooks (preprocess, train, eval)  
 ├── models/              # Model artifacts (ONNX exports, checkpoints, metadata)  
-├── cicd/                # CI/CD automation (build, test, deploy)  
+├── .github/workflows/aws-ecs-deploy.yml  # GitHub Actions deployment workflow  
+├── task-definition.json  # AWS ECS task definition  
 ├── convert_to_onnx.py   # Export trained model to ONNX  
 ├── requirements.txt     # Top-level dependencies  
 ├── LICENSE              # Project license  
@@ -251,11 +252,11 @@ cd api && pip install -r requirements.txt && uvicorn api:app --reload
 ### **Docker Deployment**
 ```bash
 # Build and run containers
-docker-compose up --build
+docker build -t brain-tumor-ai .
+docker run -p 8501:8501 brain-tumor-ai
 
 # Access applications
 # UI: http://localhost:8501
-# API: http://localhost:8000/docs
 ```
 
 ---
@@ -285,7 +286,7 @@ If you use this work in academic research, please cite:
   title = {Clinical-Grade Brain Tumor Segmentation AI},
   year = {2025},
   url = {https://github.com/dr-ridwanoladipo/brain-tumor-ai},
-  note = {Production deployment: https://brain-tumor-ai.mednexai.com}
+  note = {Production deployment: https://brain.mednexai.com}
 }
 ```
 
