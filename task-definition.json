@@ -2,8 +2,8 @@
   "family": "brain-ai-task",
   "requiresCompatibilities": ["FARGATE"],
   "networkMode": "awsvpc",
-  "cpu": "512",
-  "memory": "1024",
+  "cpu": "1024",
+  "memory": "4096",
   "executionRoleArn": "arn:aws:iam::098824477125:role/ecsTaskExecutionRole",
   "containerDefinitions": [
     {
