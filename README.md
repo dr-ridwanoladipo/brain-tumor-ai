@@ -242,7 +242,7 @@ git clone https://github.com/dr-ridwanoladipo/brain-tumor-ai.git
 cd brain-tumor-ai
 
 # Launch UI
-cd app && pip install -r requirements.txt && streamlit run app.py
+cd app && pip install -r requirements.txt && streamlit run brain_app.py
 
 # Launch API
 cd api && pip install -r requirements.txt && uvicorn api:app --reload
