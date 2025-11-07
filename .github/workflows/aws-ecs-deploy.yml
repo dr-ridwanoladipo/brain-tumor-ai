@@ -1,0 +1,220 @@
+name: 🧠 Deploy Brain Tumor AI to AWS
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Force deployment (skip cache)'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  ECR_REPOSITORY: brain-tumor-ai
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy:
+    name: Build & Deploy Medical AI System
+    runs-on: ubuntu-latest
+
+    steps:
+    # 📦 Checkout & metadata
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Generate deployment metadata
+      id: meta
+      run: |
+        echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
+        echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        echo "tag=sha-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        echo "build_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+        echo "commit_message=$(git log -1 --pretty=%B | head -1)" >> $GITHUB_OUTPUT
+
+    # 🔐 AWS authentication
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+        mask-aws-account-id: 'no'
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    # 🐳 Docker build & push
+    - name: Build Docker Image
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ steps.meta.outputs.tag }}
+        FORCE_DEPLOY: ${{ github.event.inputs.force_deploy }}
+      run: |
+        IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        LATEST_URI=$ECR_REGISTRY/$ECR_REPOSITORY:latest
+        
+        echo "Building Docker image..."
+        echo "Repository: $ECR_REPOSITORY"
+        echo "Tag: $IMAGE_TAG"
+        echo "Build date: ${{ steps.meta.outputs.build_date }}"
+        echo "Commit: ${{ steps.meta.outputs.commit_message }}"
+        
+        if [ "$FORCE_DEPLOY" != "true" ]; then
+          echo "Pulling latest image for caching..."
+          docker pull $LATEST_URI || echo "No previous image found."
+        fi
+        
+        docker build \
+          --cache-from $LATEST_URI \
+          --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+          --label "org.opencontainers.image.version=$IMAGE_TAG" \
+          --label "org.opencontainers.image.created=${{ steps.meta.outputs.build_date }}" \
+          --label "org.opencontainers.image.revision=${{ github.sha }}" \
+          --label "org.opencontainers.image.title=Brain Tumor Segmentation AI" \
+          --label "org.opencontainers.image.description=Production ML system for brain tumor segmentation" \
+          --label "maintainer=Ridwan Oladipo, MD" \
+          --label "project=brain-tumor-ai" \
+          --tag $IMAGE_URI \
+          --tag $LATEST_URI \
+          .
+        
+        echo "Docker build completed."
+        echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+        
+        docker push $IMAGE_URI
+        docker push $LATEST_URI
+        
+        echo "Images pushed successfully."
+        echo "Tagged image: $IMAGE_URI"
+        echo "Latest image: $LATEST_URI"
+    # 📝 ECS task definition update
+    - name: Update ECS task definition
+      id: task-def
+      env:
+        IMAGE_URI: ${{ steps.build-image.outputs.image_uri }}
+      run: |
+        echo "Updating ECS task definition..."
+        echo "New image URI: $IMAGE_URI"
+        
+        # Replace placeholder with actual image URI
+        sed -i "s|REPLACE_IMAGE_URI|$IMAGE_URI|g" task-definition.json
+        
+        if ! python -m json.tool task-definition.json > /dev/null; then
+          echo "Invalid JSON in task-definition.json"
+          exit 1
+        fi
+        
+        echo "Task definition updated."
+
+    - name: Register ECS task definition
+      id: register-task-def
+      run: |
+        echo "Registering ECS task definition..."
+        TASK_DEF_OUTPUT=$(aws ecs register-task-definition \
+          --cli-input-json file://task-definition.json \
+          --query 'taskDefinition.{family:family,revision:revision,status:status}' \
+          --output json)
+        
+        echo "$TASK_DEF_OUTPUT" | jq '.'
+        FAMILY=$(echo "$TASK_DEF_OUTPUT" | jq -r '.family')
+        REVISION=$(echo "$TASK_DEF_OUTPUT" | jq -r '.revision')
+        TASK_DEF_ARN="$FAMILY:$REVISION"
+        
+        echo "task_def_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
+        echo "Task definition registered: $TASK_DEF_ARN"
+
+    # 🚀 ECS deployment
+    - name: Deploy to ECS Fargate
+      id: deploy-service
+      env:
+        TASK_DEF_ARN: ${{ steps.register-task-def.outputs.task_def_arn }}
+      run: |
+        echo "Deploying to ECS..."
+        aws ecs update-service \
+          --cluster "${{ secrets.CLUSTER_NAME }}" \
+          --service "${{ secrets.SERVICE_NAME }}" \
+          --task-definition "$TASK_DEF_ARN" \
+          --force-new-deployment \
+          --query 'service.{serviceName:serviceName,taskDefinition:taskDefinition,desiredCount:desiredCount,runningCount:runningCount}' \
+          --output table
+        
+        echo "ECS service updated."
+
+    - name: Wait for deployment completion
+      id: wait-deploy
+      timeout-minutes: 15
+      run: |
+        echo "Waiting for deployment to stabilize..."
+        aws ecs wait services-stable \
+          --cluster "${{ secrets.CLUSTER_NAME }}" \
+          --services "${{ secrets.SERVICE_NAME }}"
+        
+        aws ecs describe-services \
+          --cluster "${{ secrets.CLUSTER_NAME }}" \
+          --services "${{ secrets.SERVICE_NAME }}" \
+          --query 'services[0].{serviceName:serviceName,status:status,runningCount:runningCount,desiredCount:desiredCount,taskDefinition:taskDefinition}' \
+          --output table
+
+    # 🩺 Post-deployment validation
+    - name: Verify system health
+      id: health-check
+      run: |
+        echo "Running post-deployment health checks..."
+        sleep 60
+        for i in {1..5}; do
+          if curl -f -s "https://brain.mednexai.com" > /dev/null; then
+            echo "Health check passed (attempt $i)."
+            break
+          else
+            echo "Health check failed (attempt $i/5). Retrying..."
+            if [ $i -eq 5 ]; then
+              echo "Health checks failed after 5 attempts."
+              exit 1
+            fi
+            sleep 30
+          fi
+        done
+        echo "Deployment healthy."
+
+    # ✅ Deployment summary
+    - name: Deployment Summary
+      if: always()
+      run: |
+        echo "═══════════════════════════════════════════════════════════════════════"
+        echo "BRAIN TUMOR SEGMENTATION AI - DEPLOYMENT SUMMARY"
+        echo "═══════════════════════════════════════════════════════════════════════"
+        echo ""
+        echo "Deployment Date: ${{ steps.meta.outputs.build_date }}"
+        echo "Image Tag: ${{ steps.meta.outputs.tag }}"
+        echo "Git Commit: ${{ github.sha }} (${{ steps.meta.outputs.short_sha }})"
+        echo "Commit Message: ${{ steps.meta.outputs.commit_message }}"
+        echo "Deployed by: ${{ github.actor }}"
+        echo ""
+        echo "Cluster: ${{ secrets.CLUSTER_NAME }}"
+        echo "Service: ${{ secrets.SERVICE_NAME }}"
+        echo "Task Definition: ${{ steps.register-task-def.outputs.task_def_arn }}"
+        echo ""
+        echo "URL:"
+        echo "   • Main App: https://brain.mednexai.com"
+        echo ""
+        echo "Status: ${{ job.status == 'success' && 'HEALTHY' || 'DEPLOYMENT FAILED' }}"
+        echo ""
+        echo "═══════════════════════════════════════════════════════════════════════"
+
+    # ⚠️ Failure notification
+    - name: Notify deployment status
+      if: failure()
+      run: |
+        echo "Deployment failed. Check ECS service logs and CloudWatch."
+        echo "Cluster: ${{ secrets.CLUSTER_NAME }}"
+        echo "Service: ${{ secrets.SERVICE_NAME }}"
+        echo "Review ECS events, CloudWatch logs, and ALB target group health."
