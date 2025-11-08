@@ -183,7 +183,9 @@ def main():
                         with col1:
                             video_path = load_video_cached(Path("evaluation_results") / selected_patient["cine_plain"])
                             st.video(str(video_path))
-                            st.info("Plain MRI — click **Run AI Prediction** to view overlay.")
+                            if not st.session_state.get("cine_message_shown", False):
+                                st.info("Plain MRI — click **Run AI Prediction** to view overlay.")
+                                st.session_state["cine_message_shown"] = True
                     else:
                         plain_video_path = Path("evaluation_results") / selected_patient["cine_plain"]
                         overlay_video_path = Path("evaluation_results") / selected_patient["cine_overlay"]
