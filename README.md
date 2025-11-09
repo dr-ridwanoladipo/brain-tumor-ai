@@ -7,8 +7,8 @@
 
 ---
 
-[![🎬 UI Demo](https://img.shields.io/badge/🎬_UI_Demo-Live-blue?style=flat-square)](https://huggingface.co/spaces/RidwanOladipo/brain-tumor-ai-ui)
-[![🔗 API Demo](https://img.shields.io/badge/🔗_API_Demo-Live-green?style=flat-square)](https://huggingface.co/spaces/RidwanOladipo/brain-tumor-ai-api)  
+[![🎬 UI Demo](https://img.shields.io/badge/🎬_UI_Demo-Live-blue?style=flat-square)](https://huggingface.co/spaces/dr-ridwanoladipo/brain-tumor-ai)
+[![🔗 API Demo](https://img.shields.io/badge/🔗_API_Demo-Live-green?style=flat-square)](https://huggingface.co/spaces/dr-ridwanoladipo/brain-tumor-api)  
 [![🚀 Production Ready (AWS ECS Fargate)](https://img.shields.io/badge/🚀_Production-brain.mednexai.com-f59e0b?style=flat-square)](#-deployment-options)
 
 ##### 🌐 Deployment Options:
@@ -104,13 +104,16 @@ Professional REST endpoints with comprehensive documentation:
 
 ```bash
 # Quick API test - Get available demo cases
-curl -X GET "https://ridwanoladipo-brain-tumor-ai-api.hf.space/cases"
+curl -X GET "https://dr-ridwanoladipo-brain-tumor-api.hf.space/cases"
 
 # Get model performance summary
-curl -X GET "https://ridwanoladipo-brain-tumor-ai-api.hf.space/metrics-summary"
+curl -X GET "https://dr-ridwanoladipo-brain-tumor-api.hf.space/metrics-summary"
 
 # Generate clinical report for specific case
-curl -X POST "https://ridwanoladipo-brain-tumor-ai-api.hf.space/generate-report/BraTS-GLI-00101-000"
+curl -X POST "https://dr-ridwanoladipo-brain-tumor-api.hf.space/generate-report/BraTS-GLI-00101-000"
+
+# Open interactive API docs
+https://dr-ridwanoladipo-brain-tumor-api.hf.space/docs
 ```
 
 ---
