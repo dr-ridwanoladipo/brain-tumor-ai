@@ -45,7 +45,7 @@ ___
 ## 🌐 Deployment Options:
 - **Live Demos**: Instant access via HuggingFace (UI + API)
 - **Production (On-Demand)**: Fully deployed on AWS ECS Fargate at *brain.mednexai.com* — **available by request**  
->⚡ **AWS Production**: [brain.mednexai.com](https://brain.mednexai.com) — CI/CD-enabled, <10 minutes cold-start (cost-optimized)
+>⚡ **AWS Production**: brain.mednexai.com — CI/CD-enabled, <10 minutes cold-start (cost-optimized)
 
 ---
 
