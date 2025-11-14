@@ -17,8 +17,7 @@
 ___
 
 ## 🎯 Executive Summary
-Manual brain tumor segmentation takes 25–45 minutes per case, creating critical delays in neurosurgical planning.  
-This system delivers radiologist-grade 3D segmentation in **5.8 seconds** with **86% Dice**, cutting interpretation time by **~99%** and unlocking significant clinical and operational value for hospitals.  
+Manual brain tumor segmentation takes 25–45 minutes per case, creating critical delays in neurosurgical planning. This system delivers radiologist-grade 3D segmentation in **5.8 seconds** with **86% Dice**, cutting interpretation time by **~99%** and unlocking significant clinical and operational value for hospitals.  
 Built with nnU-Net 2025, multimodal MRI fusion, and full AWS Fargate deployment, it is enterprise-ready for PACS integration, telemedicine workflows, and radiotherapy planning systems.
 
 ---
@@ -130,15 +129,17 @@ Achieved **86.1% WT Dice on a single GPU** — performance scales toward **≥90
 ---
 
 ## 👨‍⚕️ About the Developer
-**Ridwan Oladipo, MD** — Clinical AI Architect  
-Physician + MLOps engineer delivering production-ready medical AI across cardiology, radiology, and multimodal diagnostics (7+ deployed systems).
+**Ridwan Oladipo, MD — Medical Data Scientist · Clinical AI Architect**  
+Builds **end-to-end medical AI systems** — from deep learning & LLM pipelines (NLP, generative, agentic AI) to **full AWS MLOps deployment** (FastAPI, Docker, ECS Fargate, Bedrock, SageMaker).  
+Delivered **7+ production-grade systems** across cardiology, radiology, pharmacology, and multimodal diagnostics, unifying clinical expertise with advanced machine learning and cloud engineering.
 
-### **Connect & Collaborate**
-> [![🌐 portfolio](https://img.shields.io/badge/🌐_portfolio-mednexai.com-1e3c72?style=flat-square)](https://mednexai.com)
+**Professional Training:** Stanford University (AI in Healthcare) • Duke University (MLOps) • Harvard University (ML & CS50) • Johns Hopkins University (Generative AI) • University of Oxford (Agentic AI)
+
+### Connect & Collaborate
+[![🌐 portfolio](https://img.shields.io/badge/🌐_portfolio-mednexai.com-1e3c72?style=flat-square)](https://mednexai.com)
 [![linkedin](https://img.shields.io/badge/linkedin-connect-0077b5?style=flat-square&logo=linkedin)](https://linkedin.com/in/drridwanoladipoai)
 [![email](https://img.shields.io/badge/email-contact-d14836?style=flat-square&logo=gmail)](mailto:dr.ridwan.oladipo@gmail.com)
 
-- **Open to**: Senior Medical Data Scientist • Clinical AI Architect • Applied ML / MLOps Engineer  
-- **Collaboration**: Hospitals, research teams, startups, and engineering groups building real-world medical or AI-driven products
-
+**Open to:** Medical Data Scientist · Clinical AI Architect · Applied ML/MLOps Engineer  
+**Collaboration:** Hospitals, AI startups, research labs, telemedicine companies, and engineering teams building real-world medical AI products.
 
