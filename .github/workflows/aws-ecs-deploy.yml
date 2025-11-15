@@ -1,17 +1,7 @@
 name: 🧠 Deploy Brain Tumor AI to AWS
 
 on:
-  push:
-    branches:
-      - main
-      - master
   workflow_dispatch:
-    inputs:
-      force_deploy:
-        description: 'Force deployment (skip cache)'
-        required: false
-        default: 'false'
-        type: boolean
 
 env:
   ECR_REPOSITORY: brain-tumor-ai
