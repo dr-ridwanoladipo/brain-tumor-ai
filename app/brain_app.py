@@ -2,7 +2,7 @@
 🧠 Brain Tumor Segmentation AI - Streamlit Application
 Medical AI interface for brain tumor analysis.
 
-Author: Ridwan Oladipo, MD | AI Specialist
+Author: Ridwan Oladipo, MD | Clinical AI Architect
 """
 
 import time
@@ -36,7 +36,7 @@ def main():
     <div class="medical-header">
         <h1>🧠 Brain Tumor Segmentation AI</h1>
         <p>AI-powered brain tumor analysis with clinical precision</p>
-        <p><strong>By Ridwan Oladipo, MD | AI Specialist</strong></p>
+        <p><strong>By Ridwan Oladipo, MD | Clinical AI Architect</strong></p>
     </div>
     """, unsafe_allow_html=True)
 
