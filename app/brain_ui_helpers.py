@@ -1,6 +1,6 @@
 """
 🧠 Brain Tumor Segmentation UI - Helper Functions
-by Ridwan Oladipo, MD | Medical AI Specialist
+by Ridwan Oladipo, MD | Clinical AI Architect
 
 All reusable functions for the Streamlit UI application
 """
@@ -637,7 +637,7 @@ def display_footer():
             <a href="https://www.kaggle.com/code/ridwanoladipoai/nnunet-brain-tumor-evaluation">Evaluation Notebook</a>
         </div>
         <br>
-        <p>© 2025 Ridwan Oladipo, MD | Medical AI Specialist</p>
+        <p>© 2025 Ridwan Oladipo, MD | Clinical AI Architect</p>
         <p style="font-size: 0.9rem; opacity: 0.8;">
             ⚠️ Built to FDA-grade standards for clinical deployment.
             All medical decisions should be made in consultation with qualified healthcare providers.
