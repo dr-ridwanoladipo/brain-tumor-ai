@@ -629,7 +629,8 @@ def display_footer():
 
     <div class="medical-footer">
         <div class="footer-links">
-            <a href="https://github.com/dr-ridwanoladipo/brain-tumor-ai">💻 GitHub Repository</a>
+            <a href="https://github.com/dr-ridwanoladipo/brain-tumor-ai#readme">💻 GitHub Repository</a>
+            <a href="https://huggingface.co/spaces/dr-ridwanoladipo/brain-tumor-api">🔗 Live API Demo</a>
             <p style="margin-top: 1rem; font-weight: 600; color: #bfdbfe;">📊 Kaggle Notebooks Collection</p>
             <a href="https://www.kaggle.com/code/ridwanoladipoai/nnunet-brain-tumor-preprocessing">Preprocessing Notebook</a>
             <a href="https://www.kaggle.com/code/ridwanoladipoai/nnunet-brain-tumor-training">Training Notebook</a>
