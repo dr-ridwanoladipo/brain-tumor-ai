@@ -82,6 +82,16 @@ graph LR
 
 ---
 
+## 📖 Development Pipeline
+| Phase                                                                                                                   | Focus |
+|-------------------------------------------------------------------------------------------------------------------------|--------|
+| **[Preprocessing](https://github.com/dr-ridwanoladipo/brain-tumor-ai/blob/master/notebooks/preprocess_nb.ipynb)**       | N4 bias correction · multi-site harmonization · NPZ packing for SageMaker |
+| **[Training](https://github.com/dr-ridwanoladipo/brain-tumor-ai/blob/master/training/train.py)** | nnU-Net 2025 training (deep supervision, AMP, cosine LR) · early stopping |
+| **[SageMaker Submission](https://github.com/dr-ridwanoladipo/brain-tumor-ai/blob/master/sagemaker/submit_training.py)** | Spot-optimized distributed training job with checkpointing & S3 integration |
+| **[Evaluation](https://github.com/dr-ridwanoladipo/brain-tumor-ai/blob/master/notebooks/evaluation_nb.ipynb)**          | Dice scoring · robustness testing · volumetric & clinical performance analysis |
+
+---
+
 ## 🎬 Interactive Features
 
 ### **Clinical Interface**
@@ -117,14 +127,6 @@ Achieved **86.1% WT Dice on a single GPU** — performance scales toward **≥90
 ## 🧪 Clinical Validation
 - Developed under FDA SaMD-aligned principles with multi-site validation, 80/10/10 train-val-test split, and robustness testing across noise/intensity variations.
 - All medical decisions should be made in consultation with qualified healthcare providers
-
----
-## 📖 Development Pipeline
-| Phase | Notebook | Focus |
-|-------|----------|-------|
-| **Preprocessing** | [📊 Kaggle](https://www.kaggle.com/code/ridwanoladipoai/nnunet-brain-tumor-preprocessing) | N4 bias correction, multi-site harmonization |
-| **Training** | [🚀 Kaggle](https://www.kaggle.com/code/ridwanoladipoai/nnunet-brain-tumor-training) | nnU-Net 2025 optimization |
-| **Evaluation** | [📈 Kaggle](https://www.kaggle.com/code/ridwanoladipoai/nnunet-brain-tumor-evaluation) | Robustness testing, clinical metrics |
 
 ---
 
