@@ -119,6 +119,8 @@ https://dr-ridwanoladipo-brain-tumor-api.hf.space/docs
 **Production Stack**: PyTorch • nnU-Net • FastAPI • Streamlit • AWS ECS Fargate • SageMaker • Docker • GitHub Actions • CloudWatch  
 **CI/CD**: Automated deployment pipeline with health checks, rollback, zero-downtime (~5 min git push → production)
 
+**Automated Deployment Workflow** ([View CICD pipeline](https://github.com/dr-ridwanoladipo/brain-tumor-ai/blob/master/.github/workflows/aws-ecs-deploy.yml))
+
 ### ⚡ Scalability
 Achieved **86.1% WT Dice on a single GPU** — performance scales toward **≥90%** with multi-GPU or ensemble training.
 
