@@ -115,6 +115,7 @@ https://dr-ridwanoladipo-brain-tumor-api.hf.space/docs
 - **Data**: 484 multimodal brain MRIs (FLAIR/T1w/T1Gd/T2w)
 - **Preprocessing**: N4 bias correction + multi-site harmonization (DICOM-ready)
 - **Robustness**: >80% WT Dice under 15% noise & 30% intensity shifts
+- **Engineering**: Memory-mapped data pipeline (OOM-proof training on AWS Spot)
 
 **Production Stack**: PyTorch • nnU-Net • FastAPI • Streamlit • AWS ECS Fargate • SageMaker • Docker • GitHub Actions • CloudWatch  
 **CI/CD**: Automated deployment pipeline with health checks, rollback, zero-downtime (~5 min git push → production)
